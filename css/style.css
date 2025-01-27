@@ -1,0 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Radio+Canada:ital,wght@0,300..700;1,300..700&display=swap');
+
+
+/* GLOBAL FONT CHANGE */
+html, body, [class*="css"] {
+    font-family: 'Radio Canada'; 
+}
+
+.st-ae {
+    font-family: 'Radio Canada';
+}
