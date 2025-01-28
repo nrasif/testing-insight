@@ -29,5 +29,5 @@ def card_testing(cards, num_columns):
         column = columns[index % num_columns]  # Select the correct column in a round-robin manner
         with column:
             with stylable_container(f"Card-{index}", css_styles=card_style):
-                st.metric(card["text"], card["value"], card["delta"], help=card["help_text"])
+                st.metric(card["text"], card["value"], card["delta"], help=card["help_text"], delta_color=card['delta_color'])
 

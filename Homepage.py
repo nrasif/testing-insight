@@ -25,9 +25,9 @@ st.markdown(
 
 # Card Component
 cards = [
-    {"text": "Execution", "value": "88%", "delta": "+10%", "help_text": "Test case execution progress"},
-    {"text": "Passed", "value": "53%", "delta": "+11%", "help_text": "Percentage of test cases successfully executed without issues"},
-    {"text": "Failed", "value": "34%", "delta": "-7%", "help_text": "Percentage of test cases that did not meet the expected results"},
+    {"text": "Execution", "value": "88%", "delta": "+10%", "help_text": "Test case execution progress", "delta_color": "normal"},
+    {"text": "Passed", "value": "53%", "delta": "+11%", "help_text": "Percentage of test cases successfully executed without issues", "delta_color": "normal"},
+    {"text": "Failed", "value": "34%", "delta": "+7%", "help_text": "Percentage of test cases that did not meet the expected results", "delta_color": "inverse"},
 ]
 
 card_testing(cards, num_columns=3)
