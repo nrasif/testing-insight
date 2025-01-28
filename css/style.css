@@ -9,3 +9,16 @@ html, body, [class*="css"] {
 .st-ae {
     font-family: 'Radio Canada';
 }
+
+.uat_text {
+    font-size: 30px !important; /* Ensure the size takes precedence */
+    font-family: 'Radio Canada', sans-serif; /* Add fallback fonts */
+    font-weight: 600;
+    color: #24b24c;
+}
+
+.card_title {
+    font-size: 30px !important; /* Ensure the size takes precedence */
+    font-family: 'Radio Canada', sans-serif; /* Add fallback fonts */
+    font-weight: 700;
+}
