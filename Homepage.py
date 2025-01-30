@@ -1,6 +1,7 @@
 import streamlit as st
 from components.logo_sidebar import get_logo
 from components.card import card_testing
+from components.progress_stackedbar import allProgress_stacked
 
 st.set_page_config(page_title='BSI Testing Insight', layout='wide')
 
@@ -14,9 +15,9 @@ date = '28/01/2025'
 # Text title
 st.markdown(
     f"""
-    <p class='uat_line'>
-        <span class='uat_text'>UAT</span>
-        <span class='card_title'>Progress {date}</span>
+    <p class='card_feature'>
+        <span class='green_text'>UAT</span>
+        <span class='black_text'>progress {date}</span>
     </p>
     """,
     unsafe_allow_html=True
@@ -32,9 +33,17 @@ cards = [
 
 card_testing(cards, num_columns=3)
 
+st.markdown(
+    f"""
+    <p class='chart_feature'>
+        <span class='green_text'>Regression</span>
+        <span class='black_text'>all features</span>
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
-
-
+allProgress_stacked()
 
 
 
