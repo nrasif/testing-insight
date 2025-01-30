@@ -43,7 +43,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-allProgress_stacked()
+col1, col2 = st.columns([1,0.3])
+
+with col1:
+    allProgress_stacked()
+with col2:
+    st.empty()
 
 
 
