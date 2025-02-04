@@ -10,6 +10,10 @@ html, body, [class*="css"] {
     font-family: 'Radio Canada';
 }
 
+.card_feature {
+    padding-top: 25px;
+}
+
 .green_text {
     font-size: 24px !important; /* Ensure the size takes precedence */
     font-family: 'Radio Canada', sans-serif; /* Add fallback fonts */
@@ -25,17 +29,5 @@ html, body, [class*="css"] {
 
 .chart_feature {
     padding-top: 30px;
-    margin-bottom: -30px;
-}
-
-.stButtonGroup {
-    z-index: 2; 
-    position: relative;
-    width: 200px;
-}
-
-.stPlotlyChart {
-    z-index: 1;
-    position: relative;
-    margin-top: -50px;
+    margin-bottom: -20px;
 }

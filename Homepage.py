@@ -1,7 +1,7 @@
 import streamlit as st
 from components.logo_sidebar import get_logo
 from components.card import card_testing
-from components.progress_stackedbar import allProgress_stacked
+from components.progress_stackedbar import uatProgress_stacked
 
 st.set_page_config(page_title='BSI Testing Insight', layout='wide')
 
