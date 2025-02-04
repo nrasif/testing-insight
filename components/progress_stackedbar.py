@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from streamlit_extras.stylable_container import stylable_container
+
 
 @st.cache_data  # Cache the data processing to speed up re-runs
 def allRegression_proc(path):
@@ -86,9 +88,10 @@ def plot_data(df_selected):
     fig.update_traces(selector=dict(type='bar'), textposition="inside", insidetextanchor="middle", textfont_size=12)
 
     return fig
-
+@st.fragment
 def allProgress_stacked():
     options = ['Android', 'iOS']
+    
     selection = st.pills('', options, selection_mode='single', default=options[0], label_visibility='hidden')
 
     df = allRegression_proc(path='./data/data_allregresion.xlsx')

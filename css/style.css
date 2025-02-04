@@ -27,3 +27,15 @@ html, body, [class*="css"] {
     padding-top: 30px;
     margin-bottom: -30px;
 }
+
+.stButtonGroup {
+    z-index: 2; 
+    position: relative;
+    width: 200px;
+}
+
+.stPlotlyChart {
+    z-index: 1;
+    position: relative;
+    margin-top: -50px;
+}
