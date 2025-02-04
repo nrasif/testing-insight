@@ -1,16 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from streamlit_extras.stylable_container import stylable_container
 
+from utils.uat_progress import uatProgress_proc
 
-@st.cache_data  # Cache the data processing to speed up re-runs
-def allRegression_proc(path):
-    df = pd.read_excel(path)
-    df.ffill(inplace=True)
-    df[['Target Execution', 'Execution', 'Passed', 'Failed']] = df[['Target Execution', 'Execution', 'Passed', 'Failed']].applymap(lambda x: x*100).astype(float)
-    df["Tanggal"] = pd.to_datetime(df["Tanggal"], format="%m/%d/%Y", errors='coerce')
-    return df
 
 @st.cache_data  # Cache the plotting to avoid regeneration if data hasn't changed
 def plot_data(df_selected):
@@ -89,12 +82,12 @@ def plot_data(df_selected):
 
     return fig
 @st.fragment
-def allProgress_stacked():
+def uatProgress_stacked():
     options = ['Android', 'iOS']
     
     selection = st.pills('', options, selection_mode='single', default=options[0], label_visibility='hidden')
 
-    df = allRegression_proc(path='./data/data_allregresion.xlsx')
+    df = uatProgress_proc(path='./data/uat_progress.xlsx')
     df_selected = df[df['OS'] == selection]
 
     if not df_selected.empty:
@@ -104,4 +97,4 @@ def allProgress_stacked():
         st.write(f"Please choose the OS platform")
 
 if __name__ == "__main__":
-    allProgress_stacked()
+    uatProgress_stacked()

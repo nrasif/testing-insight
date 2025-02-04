@@ -1,7 +1,7 @@
 import streamlit as st
 from components.logo_sidebar import get_logo
 from components.card import card_testing
-from components.progress_stackedbar import allProgress_stacked
+from components.progress_stackedbar import uatProgress_stacked
 from datetime import datetime
 
 st.set_page_config(page_title='BSI Testing Insight', layout='wide')
@@ -47,7 +47,7 @@ with col1:
     unsafe_allow_html=True
 )
     
-    allProgress_stacked()
+    uatProgress_stacked()
     
 with col2:
     st.markdown(
