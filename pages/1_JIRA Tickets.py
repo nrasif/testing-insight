@@ -302,7 +302,21 @@ with main_col1:
     if df_filtered.empty or not ('Tickets' in df_filtered.columns and 'Title' in df_filtered.columns):
         st.info("Sorry! There are no tickets matching the selected filters")
     else:
-        total_tickets = len(df_filtered)
+        
+        hot_opt = ["Recent", "Hot"]
+        hot_selection = st.pills(" ", hot_opt, label_visibility='collapsed')
+        
+        
+        df_for_display = df_filtered.copy()
+        if hot_selection == "Hot":
+            if 'Count_Comments' in df_for_display.columns:
+                df_for_display = df_for_display[df_for_display['Count_Comments'] > 3]
+        elif hot_selection == "Recent":
+            if 'Created' in df_for_display.columns:
+                df_for_display['Created'] = pd.to_datetime(df_for_display['Created'])
+                df_for_display = df_for_display.sort_values(by='Created', ascending=False)
+                
+        total_tickets = len(df_for_display)
         # bikin total page dibagi sisa (//) dengan 20, misal 141 dibagi 20 sisa 7 sebelum ke koma, karena untuk mencakup sisa tiket, ditambah 1
         total_pages = (total_tickets - 1) // TICKETS_PER_PAGE + 1 if total_tickets > 0 else 1
 
@@ -315,18 +329,21 @@ with main_col1:
         start_idx = (st.session_state.current_page_col1 - 1) * TICKETS_PER_PAGE
         end_idx = min(start_idx + TICKETS_PER_PAGE, total_tickets)
         
-        tickets_to_display = df_filtered.iloc[start_idx:end_idx]
+        tickets_to_display = df_for_display.iloc[start_idx:end_idx]
         
-        ticket_list_container = st.container(height=1380, border=False)
+        ticket_list_container = st.container(height=1330, border=False)
         with ticket_list_container:
             if tickets_to_display.empty:
                 st.write("There are no tickets to display on this page.")
             else:
                 for index, row in tickets_to_display.iterrows():
-                    ticket_id = str(row['Tickets']) # ngambil id ticket dari baris saat ini
-                    ticket_title = str(row['Title']) # ngambil judul ticket dari baris saat ini
+                    ticket_id = str(row['Tickets'])
+                    ticket_title = str(row['Title'])
+                    # Ambil jumlah komen dari kolom 'Count_Comments'
+                    # Pakai .get() lebih aman, kalau kolomnya nggak ada, dia nggak error
+                    comment_count = row.get('Count_Comments', 0) 
                     
-                    # Logika pemotongan judul ini tetap dipertahankan
+                    # Logika pemotongan judul tetap dipertahankan
                     shortened_title = ticket_title 
                     try:
                         title_parts = ticket_title.split(' - ')
@@ -339,10 +356,16 @@ with main_col1:
                     
                     button_key = f"select_{ticket_id}_{start_idx + index}_{st.session_state.current_page_col1}" # Button key lebih unik lagi
                     
-                    # Teks label tetap sama, CSS yang akan menangani visualnya
-                    if ticket_list_container.button(f"**{ticket_id}**: {shortened_title}", key=button_key, use_container_width=True): # dikasih if karena user ngeklik button = True
-                        st.session_state.selected_ticket_id = ticket_id # kalo tombolnya diklik, ticket_idnya disimpen
-                        st.session_state.selected_ticket_details = row.to_dict() # seluruh baris tiket yang dipilih, dijadikan dictionary dan disimpan ke session state
+                        
+                    indicator = "🔥 " if comment_count > 3 else ""
+            
+                    # 2. Gabungkan indicator ke dalam label tombol
+                    button_label = f"{indicator}**{ticket_id}**: {shortened_title}"
+                    
+                    # 3. Gunakan label baru ini di tombol lo
+                    if st.button(button_label, key=button_key, use_container_width=True):
+                        st.session_state.selected_ticket_id = ticket_id
+                        st.session_state.selected_ticket_details = row.to_dict()
 
         if total_pages > 1:
             st.markdown("---")
@@ -838,4 +861,3 @@ with main_col3:
         """
         comment_scroll_placeholder = st.container(height=1500) 
         comment_scroll_placeholder.html(comment_placeholder)
-        
