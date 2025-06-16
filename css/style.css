@@ -1,33 +1,40 @@
 @import url('https://fonts.googleapis.com/css2?family=Radio+Canada:ital,wght@0,300..700;1,300..700&display=swap');
 
-
-/* GLOBAL FONT CHANGE */
+/* GLOBAL FONT CHANGE
 html, body, [class*="css"] {
-    font-family: 'Radio Canada'; 
-}
+    font-family: 'Radio Canada', sans-serif; /* Tambahkan sans-serif sebagai fallback */
+/*}
 
-.st-ae {
-    font-family: 'Radio Canada';
-}
-
-.card_feature {
-    padding-top: 25px;
-}
+/* Ini mungkin tidak diperlukan jika global sudah cukup, tapi tidak masalah */
+/*.st-ae { /* Ini adalah class lama, mungkin perlu class yang lebih baru jika tidak works */
+/*    font-family: 'Radio Canada', sans-serif;
+} */
 
 .green_text {
-    font-size: 24px !important; /* Ensure the size takes precedence */
-    font-family: 'Radio Canada', sans-serif; /* Add fallback fonts */
+    font-size: 30px !important;
     font-weight: 600;
-    color: #24b24c;
+    color: #24b24c; /* Pastikan warna ini kontras dengan background */
 }
 
 .black_text {
-    font-size: 24px !important; /* Ensure the size takes precedence */
-    font-family: 'Radio Canada', sans-serif; /* Add fallback fonts */
+    font-size: 30px !important;
     font-weight: 700;
+    color: #333; /* Warna hitam atau abu tua agar mudah dibaca */
 }
 
-.chart_feature {
-    padding-top: 30px;
-    margin-bottom: -20px;
+
+
+/* (Opsional) Atur tinggi tombol secara eksplisit jika perlu */
+div[class*="st-key-select_"] button {
+    height: 100px; /* Sesuaikan angka ini untuk tinggi tombol yang pas */
+    display: flex;
+    justify-content: left;
+    align-items: left;
+    text-align: left;
+    background-color: #F6F6F6;
+    border: 2px solid #dee2e6;
+    border-radius: 15px;
+    transition: background-color 0.2s, border-color 0.2s;
 }
+
+
