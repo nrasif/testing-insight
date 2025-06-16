@@ -224,7 +224,7 @@ with st.expander('Filter', expanded=False):
     with reset_col:
         # Ini tombol resetnya, ditaruh di kolom sebelahnya
         st.button(
-            "Reset Filters", 
+            ":material/refresh: Reset Filters", 
             on_click=reset_all_filters, # Panggil fungsi reset saat diklik
             use_container_width=True,
             type="secondary" # Membuat tombol terlihat 'secondary' (biasanya abu-abu)
@@ -304,7 +304,7 @@ with main_col1:
     else:
         
         hot_opt = ["Recent", "Hot"]
-        hot_selection = st.pills(" ", hot_opt, label_visibility='collapsed')
+        hot_selection = st.pills(" ", hot_opt, label_visibility='collapsed', default='Recent')
         
         
         df_for_display = df_filtered.copy()
@@ -371,21 +371,21 @@ with main_col1:
             st.markdown("---")
             nav_cols = st.columns([1, 1, 2, 1, 1])
             with nav_cols[0]:
-                if st.button("⇤", key="pg_first_col1", disabled=(st.session_state.current_page_col1 == 1), use_container_width=True):
+                if st.button(":material/first_page:", key="pg_first_col1", disabled=(st.session_state.current_page_col1 == 1), use_container_width=True):
                     st.session_state.current_page_col1 = 1
                     st.rerun()
             with nav_cols[1]:
-                if st.button("<-", key="pg_prev_col1", disabled=(st.session_state.current_page_col1 == 1), use_container_width=True):
+                if st.button(":material/chevron_left:", key="pg_prev_col1", disabled=(st.session_state.current_page_col1 == 1), use_container_width=True):
                     st.session_state.current_page_col1 -= 1
                     st.rerun()
             with nav_cols[2]:
                 st.write(f"<div style='text-align: center; margin-top: 0.5em;'> {st.session_state.current_page_col1} / {total_pages}</div>", unsafe_allow_html=True)
             with nav_cols[3]:
-                if st.button("->", key="pg_next_col1", disabled=(st.session_state.current_page_col1 == total_pages), use_container_width=True):
+                if st.button(":material/chevron_right:", key="pg_next_col1", disabled=(st.session_state.current_page_col1 == total_pages), use_container_width=True):
                     st.session_state.current_page_col1 += 1
                     st.rerun()
             with nav_cols[4]:
-                if st.button("⇥", key="pg_last_col1", disabled=(st.session_state.current_page_col1 == total_pages), use_container_width=True):
+                if st.button(":material/last_page:", key="pg_last_col1", disabled=(st.session_state.current_page_col1 == total_pages), use_container_width=True):
                     st.session_state.current_page_col1 = total_pages
                     st.rerun()
 
@@ -607,7 +607,7 @@ with main_col3:
     if st.session_state.selected_ticket_details:
         ticket = st.session_state.selected_ticket_details
         
-        tab1, tab2 = st.tabs(["Comments", "History"])
+        tab1, tab2 = st.tabs([":material/forum: Comments", ":material/history: History"])
 
         with tab1:
             # st.markdown("<p style='font-size: 1.2em; font-weight: 600; color: #212529; margin-top:10px;'></p>", unsafe_allow_html=True)
