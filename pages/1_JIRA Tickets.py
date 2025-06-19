@@ -6,7 +6,13 @@ import urllib.parse
 import json
 import plotly.graph_objects as go
 
-JIRA_PATH = "data/jira_tiket.csv"
+import re
+from streamlit_extras.stylable_container import stylable_container
+
+from utils.gdrive_conn import get_list_files, read_file_from_drive
+from utils.jira_processed import jiraProgress_proc
+
+# JIRA_PATH = "data/jira_tiket.csv"
 CSS_PATH = 'css/style.css'
 TICKETS_PER_PAGE = 20
 
@@ -17,25 +23,70 @@ st.set_page_config(
     )
 
 @st.cache_data
-def load_data(path):
-    return jiraProgress_proc(path)
+def load_and_process_jira_data(filename: str) -> pd.DataFrame:
+    """
+    Fungsi ini melakukan seluruh proses:
+    1. Mencari file di Google Drive.
+    2. Membaca konten file.
+    3. Mengubahnya menjadi DataFrame.
+    4. Memproses DataFrame.
+    5. Mengembalikan DataFrame yang sudah bersih.
+    
+    Decorator @st.cache_data di sini sangat efisien karena akan men-cache
+    hasil akhir (DataFrame yang sudah diproses), sehingga seluruh proses
+    di atas hanya berjalan sekali.
+    """
+    try:
+        all_files = get_list_files()
+        file_id = all_files.get(filename)
+        
+        if not file_id:
+            st.error(f"File '{filename}' tidak ditemukan di Google Drive.")
+            return pd.DataFrame()
 
-df_jira_original = load_data(JIRA_PATH)
+        file_content = read_file_from_drive(file_id)
+        df_raw = pd.read_csv(file_content)
+        df_processed = jiraProgress_proc(df_raw)
+        
+        return df_processed
 
-# Kalkulasi nilai default tanggal sekali saja di awal
-min_date_data, max_date_data, default_date_val = (None, None, (datetime.now().date() - timedelta(days=7), datetime.now().date()))
-if 'Created' in df_jira_original.columns and not df_jira_original['Created'].dropna().empty:
+    except ValueError as ve:
+        st.error(f"Error saat memproses data: {ve}")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Terjadi kesalahan yang tidak terduga: {e}")
+        return pd.DataFrame()
+
+# Nama file yang ingin kita proses
+NAMA_FILE_JIRA = 'jira_tiket.csv' 
+
+# Cukup panggil satu fungsi ini untuk mendapatkan data matang
+df_jira_original = load_and_process_jira_data(NAMA_FILE_JIRA)
+
+
+# 1. Validasi kolom 'Created' dan siapkan filter tanggal
+if 'Created' not in df_jira_original.columns or df_jira_original['Created'].dropna().empty:
+    st.warning("Kolom 'Created' tidak ada atau kosong. Filter tanggal tidak dapat digunakan.")
+
+else:
+    # 2. Jika kolom tanggal ada dan valid, lanjutkan proses
+    
+    # Konversi tipe data jika perlu
     if not pd.api.types.is_datetime64_any_dtype(df_jira_original['Created']):
         df_jira_original['Created'] = pd.to_datetime(df_jira_original['Created'], errors='coerce')
-    
-    if not df_jira_original['Created'].dropna().empty:
-        min_date_data = df_jira_original['Created'].dropna().min().date()
-        max_date_data = df_jira_original['Created'].dropna().max().date()
-        default_date_val = (min_date_data, max_date_data)
+
+    # 3. Dapatkan rentang tanggal AKTUAL dari data
+    valid_dates = df_jira_original['Created'].dropna()
+    min_date_data = valid_dates.min().date()
+    max_date_data = valid_dates.max().date()
+
+    # 4. Inisialisasi session_state HANYA jika belum ada
+    if 'date_filter' not in st.session_state:
+        st.session_state.date_filter = (min_date_data, max_date_data)
 
 # Inisialisasi semua state filter HANYA JIKA belum ada
-if "project_filter" not in st.session_state:
-    st.session_state.project_filter = []
+# if "project_filter" not in st.session_state:
+#     st.session_state.project_filter = []
 if "status_filter" not in st.session_state:
     st.session_state.status_filter = []
 if "feature_filter" not in st.session_state:
@@ -44,18 +95,37 @@ if "platform_filter" not in st.session_state:
     st.session_state.platform_filter = []
 if "search_filter" not in st.session_state:
     st.session_state.search_filter = ""
-if "date_filter" not in st.session_state:
-    st.session_state.date_filter = default_date_val
+if "labels_filter" not in st.session_state:
+    st.session_state.label_filter = []
+if "stage_filter" not in st.session_state:
+    st.session_state.stage_filter = []
+if "solved_filter" not in st.session_state:
+    st.session_state.solved_filter = None
+if "title_filter" not in st.session_state:
+    st.session_state.title_filter = ""
 
 # Fungsi untuk mereset semua filter
-def reset_all_filters():
-    # Langsung set ulang nilai di session_state ke kondisi awal
-    st.session_state.project_filter = []
+def reset_all_filters(df_data: pd.DataFrame):
+    # st.session_state.project_filter = [] # Jika kamu pakai filter project nanti
     st.session_state.status_filter = []
     st.session_state.feature_filter = []
     st.session_state.platform_filter = []
     st.session_state.search_filter = ""
-    st.session_state.date_filter = default_date_val # Gunakan default_date_val yang sudah dihitung
+    st.session_state.labels_filter = []
+    st.session_state.stage_filter = []
+    st.session_state.solved_filter = None
+    st.session_state.title_filter = ""
+    
+    # === BAGIAN PENTING UNTUK DATE FILTER ===
+    # Hitung ulang rentang tanggal penuh langsung di sini
+    if 'Created' in df_data.columns and not df_data['Created'].dropna().empty:
+        # Kita asumsikan df_data['Created'] sudah dikonversi ke datetime di atas
+        min_date = df_data['Created'].dropna().min().date()
+        max_date = df_data['Created'].dropna().max().date()
+        st.session_state.date_filter = (min_date, max_date)
+    else:
+        # Fallback jika karena suatu hal data tanggal tidak ada saat reset
+        st.session_state.date_filter = (None, None)
     
     # Reset juga halaman dan tiket yang dipilih
     st.session_state.current_page_col1 = 1
@@ -74,6 +144,38 @@ def svg_to_img(icon_svg):
     
     return data_uri
 
+def duration_to_hours(duration_str):
+    if not isinstance(duration_str, str) or duration_str.strip() == '':
+        return np.nan
+    total_hours = 0
+    hari_match = re.search(r'(\d+)\s*hari', duration_str)
+    if hari_match:
+        total_hours += int(hari_match.group(1)) * 24
+    jam_match = re.search(r'(\d+)\s*jam', duration_str)
+    if jam_match:
+        total_hours += int(jam_match.group(1))
+    menit_match = re.search(r'(\d+)\s*menit', duration_str)
+    if menit_match:
+        total_hours += int(menit_match.group(1)) / 60
+    return total_hours if total_hours > 0 else np.nan
+
+def format_hours_to_days_hours(total_hours):
+    if pd.isna(total_hours) or total_hours < 0:
+        return "N/A"
+    if total_hours < 1:
+        minutes = round(total_hours * 60)
+        if minutes == 0 and total_hours > 0:
+            return "Kurang dari 1 menit"
+        return f"{minutes} menit"
+    days = int(total_hours // 24)
+    remaining_hours = int(total_hours % 24)
+    parts = []
+    if days > 0:
+        parts.append(f"{days} hari")
+    if remaining_hours > 0:
+        parts.append(f"{remaining_hours} jam")
+    return " ".join(parts) if parts else f"{days} hari"
+
 
 try:
     with open(CSS_PATH) as f:
@@ -91,25 +193,57 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
 # Filter Section
-with st.expander('Filter', expanded=False):
+with st.expander(':material/tune: Filter', expanded=False):
 
-    filter_col1, filter_col2, filter_col3, filter_col4, filter_col5 = st.columns([0.12, 0.22, 0.22, 0.22, 0.22]) # Sesuaikan rasio jika perlu
+    search_col, or_col, filter_col2, filter_col3, filter_col4, filter_col5 = st.columns([1.5, 0.05, 1, 1.3, 1, 1]) # Sesuaikan rasio jika perlu
 
-    with filter_col1:
-        if 'Tickets' in df_jira_original.columns:
-            df_jira_original['Project_Code'] = df_jira_original['Tickets'].apply(
-                lambda x: x.split('-')[0] if isinstance(x, str) and '-' in x else 'None'
-            )
-            project_opt_dynamic = sorted(df_jira_original['Project_Code'].unique().tolist())
-
-        project_selected = st.multiselect(
-            label='Project',
-            placeholder='Select Project',
-            options=project_opt_dynamic,
+    with search_col:
+        ticket_id_search = st.text_input(
+            label="Ticket ID Search",
+            placeholder="Ticket Code (can be multiple  e.g. 1061, 998)",
             label_visibility="collapsed",
-            key='project_filter',
+            key="search_filter"
         )
+        
+    with or_col:
+        st.markdown("""
+                    <style>
+                    .separator-line {
+                        /* Gaya default (desktop) adalah garis vertikal */
+                        border-left: 2px solid #e0e0e0;
+                        height: 40px;
+                        margin: 0 auto;
+                    }
+
+                    /* Di HP, kita ubah total gayanya */
+                    @media (max-width: 768px) {
+                    .separator-line {
+                        border-left: none; /* Hapus garis kiri */
+                        border-top: 1px solid #e0e0e0; /* Ganti dengan garis atas (jadi horizontal) */
+                        height: 0; /* Tinggi direset */
+                        width: 80%; /* Lebar garis horizontalnya 80% dari kolom */
+                        margin: 15px auto; /* Beri jarak atas dan bawah */
+                    }
+                    }
+                    </style>
+                    <div class="separator-line"></div>
+                """, unsafe_allow_html=True)
+    # with filter_col1:
+    #     if 'Tickets' in df_jira_original.columns:
+    #         df_jira_original['Project_Code'] = df_jira_original['Tickets'].apply(
+    #             lambda x: x.split('-')[0] if isinstance(x, str) and '-' in x else 'None'
+    #         )
+    #         project_opt_dynamic = sorted(df_jira_original['Project_Code'].unique().tolist())
+
+    #     project_selected = st.multiselect(
+    #         label='Project',
+    #         placeholder='Select Project',
+    #         options=project_opt_dynamic,
+    #         label_visibility="collapsed",
+    #         key='project_filter',
+    #     )
 
     with filter_col2:
         status_opt_dynamic = []
@@ -137,7 +271,6 @@ with st.expander('Filter', expanded=False):
             key='feature_filter',
         )
 
-
     with filter_col4:
         platform_opt_dynamic = []
         if 'Platform' in df_jira_original.columns and not df_jira_original.empty:
@@ -161,7 +294,6 @@ with st.expander('Filter', expanded=False):
     with filter_col5:
         created_date_range = st.date_input(
             "Date Range",
-            # value=default_date_val,
             min_value=min_date_data,
             max_value=max_date_data,
             format="DD/MM/YYYY",
@@ -169,7 +301,7 @@ with st.expander('Filter', expanded=False):
             key='date_filter'
         )
 
-    label_col, stage_col, solved_col, search_col, reset_col = st.columns([0.92, 0.85, 0.85, 4, 1.1]) # Kolom search 4x lebih lebar dari tombol
+    label_col, stage_col, solved_col, title_col, reset_col = st.columns([0.8, 0.76, 1, 2.33, 1]) # Kolom search 4x lebih lebar dari tombol
 
     with label_col:
         label_opt_dynamic = []
@@ -206,85 +338,188 @@ with st.expander('Filter', expanded=False):
         
         solved_selected = st.selectbox(
             label = 'Solved',
-            placeholder='Solved?',
+            placeholder='Is it solved?',
             options = solved_opt,
             label_visibility='collapsed',
             index=None,
             key='solved_filter'
         )
-            
-    with search_col:
-        ticket_id_search = st.text_input(
-            label="Ticket ID Search",
-            placeholder="Filter by code project, example: RIB-1006 or 1006",
-            label_visibility="collapsed",
-            key="search_filter" # <-- TAMBAHKAN KEY DI SINI JUGA
-        ).strip()
+    
+    with title_col:
+        title_search = st.text_input(
+            label="Title Search",
+            placeholder='Keywords in Title (can be multiple e.g. card, liabilities)',
+            label_visibility='collapsed',
+            key='title_filter'
+        )
 
     with reset_col:
         # Ini tombol resetnya, ditaruh di kolom sebelahnya
         st.button(
             ":material/refresh: Reset Filters", 
             on_click=reset_all_filters, # Panggil fungsi reset saat diklik
+            args=(df_jira_original,),
             use_container_width=True,
             type="secondary" # Membuat tombol terlihat 'secondary' (biasanya abu-abu)
         )
 
 
-st.markdown("<div style='margin-top:10px;'> </div>", unsafe_allow_html=True)
+# Applying Filters
+# =================== BLOK FILTER REVISI (GANTI KODE LAMA DENGAN INI) ===================
 
 # Applying Filters
 df_filtered = df_jira_original.copy()
 
-# PERTAMA: Terapkan filter Kode Tiket jika ada input
-if ticket_id_search and 'Tickets' in df_filtered.columns:
-    # Membuat pencarian case-insensitive dan memastikan 'Tickets' adalah string
-    df_filtered = df_filtered[df_filtered['Tickets'].astype(str).str.contains(ticket_id_search, case=False, na=False)]
+# Selalu baca dari st.session_state sebagai sumber kebenaran
 
-# KEDUA: Terapkan filter-filter lainnya ke df_filtered yang MUNGKIN sudah tersaring oleh pencarian ID tiket
-if project_selected: 
-    if 'Project_Code' in df_filtered.columns: # Ganti 'Project_Derived' jadi 'Project_Code' sesuai kode filter_col1
-        df_filtered = df_filtered[df_filtered['Project_Code'].isin(project_selected)]
+if st.session_state.search_filter and 'Tickets' in df_filtered.columns:
+    search_terms = [term.strip() for term in st.session_state.search_filter.split(',') if term.strip()]
+    if search_terms:
+        regex_pattern = '|'.join(search_terms)
+        df_filtered = df_filtered[df_filtered['Tickets'].astype(str).str.contains(regex_pattern, case=False, na=False)]
 
-if status_selected and 'Status' in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered['Status'].isin(status_selected)]
+if st.session_state.status_filter and 'Status' in df_filtered.columns:
+    df_filtered = df_filtered[df_filtered['Status'].isin(st.session_state.status_filter)]
 
-if feature_selected and 'Feature' in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered['Feature'].isin(feature_selected)]
+if st.session_state.feature_filter and 'Feature' in df_filtered.columns:
+    df_filtered = df_filtered[df_filtered['Feature'].isin(st.session_state.feature_filter)]
 
-if platform_selected and 'Platform' in df_filtered.columns:
-    platform_conditions = pd.Series([False] * len(df_filtered), index=df_filtered.index) # bikin dulu kondisi awal False dgn panjang index series sama dengan df_filtered
-    for p_select in platform_selected:
-    # pake simbol | untuk atau, jadi platform_condition | hasil contain -> kalo hasilnya ada, berarti ambil True, karena False | True = True
-    # kenapa kita pake cara ini, karena untuk menghindari looping yang setelah kefilter, difilter lagi kalo misal selected platformnya lebih dari satu
-    # misal user pilih "android", data nampilin android, tp ketika user pilih lagi 'iOS', data yang tadi udah nampil android, jadi kita filter lagi buat iOS. hasilnya kosong
-    # makanya pake metode OR atau | buat nandain misal user milih "android" ya berarti True, tp kalo user pilih "iOS" juga, True yg tadi ga keubah krn ["android", "iOS"] ngubah 22nya True
+if st.session_state.platform_filter and 'Platform' in df_filtered.columns:
+    platform_conditions = pd.Series([False] * len(df_filtered), index=df_filtered.index)
+    for p_select in st.session_state.platform_filter:
         platform_conditions = platform_conditions | df_filtered['Platform'].str.contains(p_select, case=False, na=False)
-    df_filtered = df_filtered[platform_conditions] # since platform_condition kita bikin indexnya sama dengan df_filtered, jadi bisa langsung filter df_filtered
-    # istilahnya nih df_filtered['Platform'].str.contains(p_select, case=False, na=False) buat yang True
+    df_filtered = df_filtered[platform_conditions]
 
-if created_date_range and len(created_date_range) == 2 and 'Created' in df_filtered.columns:
-    start_date, end_date = pd.to_datetime(created_date_range[0]), pd.to_datetime(created_date_range[1])
-    df_filtered['Created'] = pd.to_datetime(df_filtered['Created'], errors='coerce') # Pastikan datetime
+if st.session_state.date_filter and len(st.session_state.date_filter) == 2 and 'Created' in df_filtered.columns:
+    # Kita asumsikan 'Created' sudah jadi datetime
+    start_date, end_date = pd.to_datetime(st.session_state.date_filter[0]), pd.to_datetime(st.session_state.date_filter[1])
     df_filtered = df_filtered[
         (df_filtered['Created'].dt.normalize() >= start_date.normalize()) &
         (df_filtered['Created'].dt.normalize() <= end_date.normalize())
     ]
     
-if label_selected and 'Labels' in df_filtered.columns:
-    regex_pattern = '|'.join(label_selected) # tambahin atau as dia bisa contain lebih dari 1
-    df_filtered = df_filtered[df_filtered['Labels'].str.contains(regex_pattern, na=False)] # na = False, biar ga error ketika filternya NaN
+if st.session_state.labels_filter and 'Labels' in df_filtered.columns:
+    regex_pattern = '|'.join(st.session_state.labels_filter)
+    df_filtered = df_filtered[df_filtered['Labels'].str.contains(regex_pattern, na=False)]
     
-if stage_selected and 'Stage' in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered['Stage'].isin(stage_selected)]
+if st.session_state.stage_filter and 'Stage' in df_filtered.columns:
+    df_filtered = df_filtered[df_filtered['Stage'].isin(st.session_state.stage_filter)]
     
-if solved_selected == 'Solved':
+if st.session_state.solved_filter == 'Solved':
     df_filtered = df_filtered[df_filtered['Resolved_Time'].notna()]
+elif st.session_state.solved_filter == 'Not Yet':
+    df_filtered = df_filtered[~df_filtered['Status'].isin(['RESOLVE', 'Invalid'])]
 
-elif solved_selected == 'Not Yet':
-    df_filtered = df_filtered[df_filtered['Resolved_Time'].isna()]
+if st.session_state.title_filter and 'Title' in df_filtered.columns:
+    title_terms = [term.strip() for term in st.session_state.title_filter.split(',') if term.strip()]
+    if title_terms:
+        regex_pattern = '|'.join(title_terms)
+        df_filtered = df_filtered[df_filtered['Title'].astype(str).str.contains(regex_pattern, case=False, na=False)]
     
-    
+# 1. Konversi kolom waktu
+df_filtered['Resolved_Time'] = pd.to_datetime(df_filtered['Resolved_Time'], errors='coerce')
+
+# 2. Hitung tiket open & solved
+total_open_tickets = (df_filtered['Resolved_Time'].isna() & (df_filtered['Status'] != 'Invalid')).sum()
+total_solved_tickets = (df_filtered['Resolved_Time'].notna()).sum()
+total_invalid_ticket = (df_filtered['Status'] == 'Invalid').sum()
+
+
+# 3. Hitung rata-rata waktu penyelesaian
+solved_tickets_df = df_filtered[df_filtered['Resolved_Time'].notna()].copy()
+solved_tickets_df['duration_hours'] = solved_tickets_df['Duration_toResolve'].apply(duration_to_hours)
+avg_duration_in_hours = solved_tickets_df['duration_hours'].mean()
+formatted_avg_duration = format_hours_to_days_hours(avg_duration_in_hours)
+
+
+# 4. Tampilkan metrik
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    with stylable_container(
+        key="open_tickets_metric",
+        css_styles="""
+            div[data-testid="stMetric"] {
+                
+                border: 2px solid #dee2e6;
+                border-radius: 1rem;
+                transition: all 0.2s ease-in-out;
+            }
+
+            div[data-testid="stMetric"]:hover {
+                
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+                transform: scale(1.01);
+                z-index: 10;
+            }
+            """
+    ):
+        st.metric("Total Open Tickets", f"{total_open_tickets}", border=True, help='Ticket that is not solved with status include everything except "Resolve" and "Invalid"' )
+
+with col2:
+    with stylable_container(
+        key="solved_tickets_metric",
+        css_styles="""
+            div[data-testid="stMetric"] {
+                
+                border: 2px solid #dee2e6;
+                border-radius: 1rem;
+                transition: all 0.2s ease-in-out;
+            }
+
+            div[data-testid="stMetric"]:hover {
+                
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+                transform: scale(1.01);
+                z-index: 10;
+            }
+            """
+    ):
+        st.metric("Solved Tickets", f"{total_solved_tickets}", border=True, help='Ticket that is solved')
+        
+with col3:
+    with stylable_container(
+        key="solved_tickets_metric",
+        css_styles="""
+            div[data-testid="stMetric"] {
+                
+                border: 2px solid #dee2e6;
+                border-radius: 1rem;
+                transition: all 0.2s ease-in-out;
+            }
+
+            div[data-testid="stMetric"]:hover {
+                
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+                transform: scale(1.01);
+                z-index: 10;
+            }
+            """
+    ):
+        st.metric("Invalid Ticket", f"{total_invalid_ticket}", border=True, help='Ticket that is Invalid')
+
+with col4:
+    with stylable_container(
+        key="average_tickets_metric",
+        css_styles="""
+            div[data-testid="stMetric"] {
+                
+                border: 2px solid #dee2e6;
+                border-radius: 1rem;
+                transition: all 0.2s ease-in-out;
+            }
+
+            div[data-testid="stMetric"]:hover {
+                
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+                transform: scale(1.01);
+                z-index: 10;
+            }
+            """
+    ):
+        st.metric("Average Time to Solved", formatted_avg_duration, border=True, help='Average time for ticket to solved or closed')
+        
+st.markdown("<div style='margin-top:20px;'> </div>", unsafe_allow_html=True)
 
 # Session State
 if 'current_page_col1' not in st.session_state: # ini page si user disimpen ke dalem session_state, kalo misal baru, halaman 1
@@ -391,7 +626,7 @@ with main_col1:
 
 with main_col2:
     
-    details_container = st.container(height=1500) 
+    details_container = st.container(height=1500, key='main_col2', border=True) 
     
     if st.session_state.selected_ticket_details:
         ticket = st.session_state.selected_ticket_details
@@ -526,7 +761,6 @@ with main_col2:
                 except (ValueError, TypeError, pd.errors.ParserError):
                     # Jika gagal, kembalikan string aslinya
                     return str(date_string)
-            # Jika datanya kosong atau "–", kembalikan "–"
             return "–"
         
         created_str = format_date_safe(ticket.get('Created'))
@@ -542,7 +776,7 @@ with main_col2:
         col2_content += render_meta_item_html("Testing At", tested_str)
         col2_content += render_meta_item_html("Created At", created_str)
         col2_content += render_meta_item_html("Latest Status Update", last_update_val)
-        col2_content += render_meta_item_html("Solved At", resolved_str, default_val="Belum Selesai")
+        col2_content += render_meta_item_html("Solved At", resolved_str)
         col2_content += render_meta_item_html("Solved Duration", duration_val, default_val="Not Yet")
         
         col2_content += "</div>"
