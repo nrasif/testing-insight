@@ -10,6 +10,16 @@ from utils.jira_processed import jiraProgress_proc
 from components.filters import apply_filters, reset_jira_filters
 
 st.set_page_config(page_title='BSI Testing Insight', layout='wide')
+st.html("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
+        
+        /* Ini adalah font default untuk seluruh aplikasi */
+        html, body, [class*="css"] {
+            font-family: 'Poppins', sans-serif;
+        }
+    </style>
+""")
 
 @st.cache_data
 def load_and_process_jira_data(filename: str) -> pd.DataFrame:
@@ -147,14 +157,13 @@ def format_hours_to_days_hours(total_hours):
 with open('css/style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html = True)
     
-st.markdown(
+st.html(
     f"""
-    <p style="font-size: 24px; margin-bottom: 20px;">
+    <p style="margin-bottom: 20px;">
         <span class='green_text'>JIRA</span>
         <span class='black_text'>Dashboard</span>
     </p>
-    """,
-    unsafe_allow_html=True
+    """
 )
 
 # Filter Section
@@ -317,9 +326,7 @@ with st.expander(':material/tune: Filter', expanded=False):
             use_container_width=True,
             type="secondary" # Membuat tombol terlihat 'secondary' (biasanya abu-abu)
         )
-
-
-# --- Menerapkan Filter menggunakan fungsi dari filters.py ---
+        
 df_filtered = apply_filters(
     df_jira_original,
     st.session_state.search_filter,
@@ -334,19 +341,15 @@ df_filtered = apply_filters(
 )
 
 
-
-# 1. Konversi kolom waktu
 df_filtered['Resolved_Time'] = pd.to_datetime(df_filtered['Resolved_Time'], errors='coerce')
 
-# 2. Hitung tiket open & solved
 total_open_tickets = (df_filtered['Resolved_Time'].isna() & (df_filtered['Status'] != 'Invalid')).sum()
 total_solved_tickets = (df_filtered['Resolved_Time'].notna()).sum()
 total_invalid_ticket = (df_filtered['Status'] == 'Invalid').sum()
 
-
-# 3. Hitung rata-rata waktu penyelesaian
 solved_tickets_df = df_filtered[df_filtered['Resolved_Time'].notna()].copy()
 solved_tickets_df['duration_hours'] = solved_tickets_df['Duration_toResolve'].apply(duration_to_hours)
 avg_duration_in_hours = solved_tickets_df['duration_hours'].mean()
 formatted_avg_duration = format_hours_to_days_hours(avg_duration_in_hours)
+
 

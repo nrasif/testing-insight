@@ -27,6 +27,17 @@ st.set_page_config(
     layout='wide'
     )
 
+st.html("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
+        
+        /* Ini adalah font default untuk seluruh aplikasi */
+        html, body, [class*="css"] {
+            font-family: 'Poppins', sans-serif;
+        }
+    </style>
+""")
+
 @st.cache_data
 def load_and_process_jira_data(filename: str) -> pd.DataFrame:
     """
@@ -182,14 +193,13 @@ try:
 except FileNotFoundError:
     st.warning(f"CSS file '{CSS_PATH}' not found.")
 
-st.markdown(
+st.html(
     f"""
-    <p style="font-size: 24px; margin-bottom: 20px;">
+    <p style="margin-bottom: 20px;">
         <span class='green_text'>JIRA</span>
         <span class='black_text'>View</span>
     </p>
-    """,
-    unsafe_allow_html=True
+    """
 )
 
 
@@ -511,7 +521,7 @@ with col4:
     ):
         st.metric("Average Time to Solved", formatted_avg_duration, border=True, help='Average time for ticket to solved or closed')
         
-st.markdown("<div style='margin-top:20px;'> </div>", unsafe_allow_html=True)
+st.markdown("<div style='margin-top:40px;'> </div>", unsafe_allow_html=True)
 
 # Session State
 if 'current_page_col1' not in st.session_state: # ini page si user disimpen ke dalem session_state, kalo misal baru, halaman 1
@@ -543,7 +553,7 @@ with main_col1:
         
         hot_opt = ["Recent", "Hot"]
         # Saran: Tambahkan key di sini dan masukkan ke 'current_filters' agar lebih konsisten
-        hot_selection = st.pills(" ", hot_opt, label_visibility='collapsed', key="hot_filter")
+        hot_selection = st.pills(" ", hot_opt, default='Recent', label_visibility='collapsed', key="hot_filter")
         
         df_for_display = df_filtered.copy()
         if hot_selection == "Hot":
@@ -618,7 +628,7 @@ with main_col2:
         ticket = st.session_state.selected_ticket_details
 
         # --- Mulai Bangun SATU String HTML untuk Seluruh Konten ---
-        details_html = "<div style='padding: 0px 20px;'>" 
+        details_html = "<div style='padding: 20px 40px;'>" 
 
         # Ambil kode tiket untuk membuat URL
         ticket_code = ticket.get('Tickets', 'N/A')
@@ -669,7 +679,7 @@ with main_col2:
 
             </div>
 
-            <h2 style="font-size: 1.8em; font-weight: 600; color: #212529; margin-top: 0px; margin-bottom: 0px; line-height: 1.3;">
+            <h2 style="font-size: 1.8em; font-weight: 600; color: #212529; margin-top: 10px; margin-bottom: 50px; line-height: 1.3;">
                 {ticket.get('Title', 'N/A')}
             </h2>
         </div>
@@ -681,7 +691,7 @@ with main_col2:
             display_value = value if pd.notna(value) and str(value).strip() and str(value).lower() not in ['nan', 'nat', 'none', ''] else default_val
             return f"""
             <div style="margin-bottom: 18px;"> 
-                <p style="font-size: 0.7em; color: #6c757d; margin-bottom: 2px; text-transform: uppercase; font-weight: 500; letter-spacing: 0.5px;">{label}</p>
+                <p style="font-size: 0.7em; color: #6c757d; margin-bottom: 0px; text-transform: uppercase; font-weight: 500; letter-spacing: 0.5px;">{label}</p>
                 <p style="font-size: 0.9em; color: #212529; margin-bottom: 0px; line-height: 1.3;">{display_value}</p>
             </div>
             """
@@ -771,8 +781,8 @@ with main_col2:
         details_html += "</div>" # Penutup grid utama
 
         # --- BAGIAN BARU: Menampilkan Deskripsi ---
-        details_html += "<hr style='border: none; border-top: 1px solid #e9ecef; margin: 25px 0px 15px 0px;'>"
-        details_html += "<p style='font-size: 0.8em; color: #495057; margin-bottom: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;'>Description</p>"
+        details_html += "<hr style='border: none; border-top: 2px solid #e9ecef; margin: 30px 0px 30px 0px;'>"
+        details_html += "<p style='font-size: 0.8em; color: #495057; margin-bottom: 30px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;'>Description</p>"
         
         # Ambil deskripsi yang sudah bersih dari dictionary 'ticket'.
         # 'Description' adalah nama kolom baru yang kita buat di ipynb.
