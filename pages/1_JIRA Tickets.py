@@ -5,12 +5,16 @@ from datetime import datetime, timedelta
 import urllib.parse
 import json
 import plotly.graph_objects as go
+import numpy as np # Pastikan numpy diimpor karena digunakan oleh duration_to_hours dan format_hours_to_days_hours
 
 import re
 from streamlit_extras.stylable_container import stylable_container
 
 from utils.gdrive_conn import get_list_files, read_file_from_drive
 from utils.jira_processed import jiraProgress_proc
+
+# --- Import fungsi filter dari modul terpisah ---
+from components.filters import apply_filters, reset_jira_filters
 
 # JIRA_PATH = "data/jira_tiket.csv"
 CSS_PATH = 'css/style.css'
@@ -61,13 +65,15 @@ def load_and_process_jira_data(filename: str) -> pd.DataFrame:
 NAMA_FILE_JIRA = 'jira_tiket.csv' 
 
 # Cukup panggil satu fungsi ini untuk mendapatkan data matang
-df_jira_original = load_and_process_jira_data(NAMA_FILE_JIRA)
+with st.spinner("Sabar yah, lagi ngeload datanya nih hehe..", show_time=True):
+    df_jira_original = load_and_process_jira_data(NAMA_FILE_JIRA)
 
 
 # 1. Validasi kolom 'Created' dan siapkan filter tanggal
 if 'Created' not in df_jira_original.columns or df_jira_original['Created'].dropna().empty:
     st.warning("Kolom 'Created' tidak ada atau kosong. Filter tanggal tidak dapat digunakan.")
-
+    min_date_data = None
+    max_date_data = None
 else:
     # 2. Jika kolom tanggal ada dan valid, lanjutkan proses
     
@@ -85,8 +91,6 @@ else:
         st.session_state.date_filter = (min_date_data, max_date_data)
 
 # Inisialisasi semua state filter HANYA JIKA belum ada
-# if "project_filter" not in st.session_state:
-#     st.session_state.project_filter = []
 if "status_filter" not in st.session_state:
     st.session_state.status_filter = []
 if "feature_filter" not in st.session_state:
@@ -104,34 +108,13 @@ if "solved_filter" not in st.session_state:
 if "title_filter" not in st.session_state:
     st.session_state.title_filter = ""
 
-# Fungsi untuk mereset semua filter
-def reset_all_filters(df_data: pd.DataFrame):
-    # st.session_state.project_filter = [] # Jika kamu pakai filter project nanti
-    st.session_state.status_filter = []
-    st.session_state.feature_filter = []
-    st.session_state.platform_filter = []
-    st.session_state.search_filter = ""
-    st.session_state.labels_filter = []
-    st.session_state.stage_filter = []
-    st.session_state.solved_filter = None
-    st.session_state.title_filter = ""
-    
-    # === BAGIAN PENTING UNTUK DATE FILTER ===
-    # Hitung ulang rentang tanggal penuh langsung di sini
-    if 'Created' in df_data.columns and not df_data['Created'].dropna().empty:
-        # Kita asumsikan df_data['Created'] sudah dikonversi ke datetime di atas
-        min_date = df_data['Created'].dropna().min().date()
-        max_date = df_data['Created'].dropna().max().date()
-        st.session_state.date_filter = (min_date, max_date)
-    else:
-        # Fallback jika karena suatu hal data tanggal tidak ada saat reset
-        st.session_state.date_filter = (None, None)
-    
-    # Reset juga halaman dan tiket yang dipilih
-    st.session_state.current_page_col1 = 1
-    st.session_state.selected_ticket_id = None
-    st.session_state.selected_ticket_details = None
-    
+# Wrapper function untuk tombol reset
+def reset_all_filters_wrapper(df_data: pd.DataFrame):
+    """
+    Fungsi pembungkus untuk memanggil reset_jira_filters dari modul filters.py.
+    """
+    reset_jira_filters(df_data)
+
 def svg_to_img(icon_svg):
     """
     Membuat string HTML untuk placeholder yang bisa dipakai ulang.
@@ -187,7 +170,7 @@ st.markdown(
     f"""
     <p style="font-size: 24px; margin-bottom: 20px;">
         <span class='green_text'>JIRA</span>
-        <span class='black_text'>Tickets</span>
+        <span class='black_text'>View</span>
     </p>
     """,
     unsafe_allow_html=True
@@ -230,20 +213,6 @@ with st.expander(':material/tune: Filter', expanded=False):
                     </style>
                     <div class="separator-line"></div>
                 """, unsafe_allow_html=True)
-    # with filter_col1:
-    #     if 'Tickets' in df_jira_original.columns:
-    #         df_jira_original['Project_Code'] = df_jira_original['Tickets'].apply(
-    #             lambda x: x.split('-')[0] if isinstance(x, str) and '-' in x else 'None'
-    #         )
-    #         project_opt_dynamic = sorted(df_jira_original['Project_Code'].unique().tolist())
-
-    #     project_selected = st.multiselect(
-    #         label='Project',
-    #         placeholder='Select Project',
-    #         options=project_opt_dynamic,
-    #         label_visibility="collapsed",
-    #         key='project_filter',
-    #     )
 
     with filter_col2:
         status_opt_dynamic = []
@@ -292,20 +261,26 @@ with st.expander(':material/tune: Filter', expanded=False):
         )
 
     with filter_col5:
-        created_date_range = st.date_input(
-            "Date Range",
-            min_value=min_date_data,
-            max_value=max_date_data,
-            format="DD/MM/YYYY",
-            label_visibility="collapsed",
-            key='date_filter'
-        )
+        # Pastikan min_value dan max_value tidak None jika df_jira_original kosong
+        if min_date_data is not None and max_date_data is not None:
+            created_date_range = st.date_input(
+                "Date Range",
+                min_value=min_date_data,
+                max_value=max_date_data,
+                format="DD/MM/YYYY",
+                label_visibility="collapsed",
+                key='date_filter'
+            )
+        else:
+            st.warning("Tanggal tidak tersedia untuk filter. Pastikan kolom 'Created' ada dan berisi data.")
+            created_date_range = None # Atau set ke nilai default lain yang sesuai
+
 
     label_col, stage_col, solved_col, title_col, reset_col = st.columns([0.8, 0.76, 1, 2.33, 1]) # Kolom search 4x lebih lebar dari tombol
 
     with label_col:
         label_opt_dynamic = []
-        if "Labels" in df_jira_original and not df_jira_original['Labels'].dropna().empty:
+        if "Labels" in df_jira_original.columns and not df_jira_original['Labels'].dropna().empty:
             exploded_labels = df_jira_original['Labels'].dropna().str.split(',').explode()
             unique_labels = sorted(exploded_labels.str.strip().unique())
             
@@ -322,7 +297,7 @@ with st.expander(':material/tune: Filter', expanded=False):
         
     with stage_col:
         stage_opt_dynamic = []
-        if "Stage" in df_jira_original and not df_jira_original['Stage'].dropna().empty:
+        if "Stage" in df_jira_original.columns and not df_jira_original['Stage'].dropna().empty:
             stage_opt_dynamic = sorted(df_jira_original['Stage'].astype(str).unique().tolist())
             
             stage_selected = st.multiselect(
@@ -357,65 +332,29 @@ with st.expander(':material/tune: Filter', expanded=False):
         # Ini tombol resetnya, ditaruh di kolom sebelahnya
         st.button(
             ":material/refresh: Reset Filters", 
-            on_click=reset_all_filters, # Panggil fungsi reset saat diklik
+            on_click=reset_all_filters_wrapper, # Panggil fungsi reset_all_filters_wrapper
             args=(df_jira_original,),
             use_container_width=True,
             type="secondary" # Membuat tombol terlihat 'secondary' (biasanya abu-abu)
         )
 
 
-# Applying Filters
-# =================== BLOK FILTER REVISI (GANTI KODE LAMA DENGAN INI) ===================
+# --- Menerapkan Filter menggunakan fungsi dari filters.py ---
+df_filtered = apply_filters(
+    df_jira_original,
+    st.session_state.search_filter,
+    st.session_state.status_filter,
+    st.session_state.feature_filter,
+    st.session_state.platform_filter,
+    st.session_state.date_filter,
+    st.session_state.labels_filter,
+    st.session_state.stage_filter,
+    st.session_state.solved_filter,
+    st.session_state.title_filter
+)
 
-# Applying Filters
-df_filtered = df_jira_original.copy()
 
-# Selalu baca dari st.session_state sebagai sumber kebenaran
 
-if st.session_state.search_filter and 'Tickets' in df_filtered.columns:
-    search_terms = [term.strip() for term in st.session_state.search_filter.split(',') if term.strip()]
-    if search_terms:
-        regex_pattern = '|'.join(search_terms)
-        df_filtered = df_filtered[df_filtered['Tickets'].astype(str).str.contains(regex_pattern, case=False, na=False)]
-
-if st.session_state.status_filter and 'Status' in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered['Status'].isin(st.session_state.status_filter)]
-
-if st.session_state.feature_filter and 'Feature' in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered['Feature'].isin(st.session_state.feature_filter)]
-
-if st.session_state.platform_filter and 'Platform' in df_filtered.columns:
-    platform_conditions = pd.Series([False] * len(df_filtered), index=df_filtered.index)
-    for p_select in st.session_state.platform_filter:
-        platform_conditions = platform_conditions | df_filtered['Platform'].str.contains(p_select, case=False, na=False)
-    df_filtered = df_filtered[platform_conditions]
-
-if st.session_state.date_filter and len(st.session_state.date_filter) == 2 and 'Created' in df_filtered.columns:
-    # Kita asumsikan 'Created' sudah jadi datetime
-    start_date, end_date = pd.to_datetime(st.session_state.date_filter[0]), pd.to_datetime(st.session_state.date_filter[1])
-    df_filtered = df_filtered[
-        (df_filtered['Created'].dt.normalize() >= start_date.normalize()) &
-        (df_filtered['Created'].dt.normalize() <= end_date.normalize())
-    ]
-    
-if st.session_state.labels_filter and 'Labels' in df_filtered.columns:
-    regex_pattern = '|'.join(st.session_state.labels_filter)
-    df_filtered = df_filtered[df_filtered['Labels'].str.contains(regex_pattern, na=False)]
-    
-if st.session_state.stage_filter and 'Stage' in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered['Stage'].isin(st.session_state.stage_filter)]
-    
-if st.session_state.solved_filter == 'Solved':
-    df_filtered = df_filtered[df_filtered['Resolved_Time'].notna()]
-elif st.session_state.solved_filter == 'Not Yet':
-    df_filtered = df_filtered[~df_filtered['Status'].isin(['RESOLVE', 'Invalid'])]
-
-if st.session_state.title_filter and 'Title' in df_filtered.columns:
-    title_terms = [term.strip() for term in st.session_state.title_filter.split(',') if term.strip()]
-    if title_terms:
-        regex_pattern = '|'.join(title_terms)
-        df_filtered = df_filtered[df_filtered['Title'].astype(str).str.contains(regex_pattern, case=False, na=False)]
-    
 # 1. Konversi kolom waktu
 df_filtered['Resolved_Time'] = pd.to_datetime(df_filtered['Resolved_Time'], errors='coerce')
 
@@ -566,7 +505,7 @@ with main_col1:
         
         tickets_to_display = df_for_display.iloc[start_idx:end_idx]
         
-        ticket_list_container = st.container(height=1330, border=False)
+        ticket_list_container = st.container(height=1130, border=False)
         with ticket_list_container:
             if tickets_to_display.empty:
                 st.write("There are no tickets to display on this page.")
@@ -626,7 +565,7 @@ with main_col1:
 
 with main_col2:
     
-    details_container = st.container(height=1500, key='main_col2', border=True) 
+    details_container = st.container(height=1300, key='main_col2', border=True) 
     
     if st.session_state.selected_ticket_details:
         ticket = st.session_state.selected_ticket_details
@@ -846,7 +785,7 @@ with main_col3:
         with tab1:
             # st.markdown("<p style='font-size: 1.2em; font-weight: 600; color: #212529; margin-top:10px;'></p>", unsafe_allow_html=True)
             comments_html_string = ticket.get('Comments_HTML', '')
-            comment_scroll_container = st.container(height=1440)
+            comment_scroll_container = st.container(height=1240)
             if pd.notna(comments_html_string) and comments_html_string.strip():
                 comment_scroll_container.html(f"<div style='padding-right:10px;'>{comments_html_string}</div>")
             else:
@@ -921,7 +860,8 @@ with main_col3:
                     
                     # Cek apakah ada sequence cepat setelah event ini
                     j = i + 1
-                    while j < len(df_history) and (df_history.loc[j, 'timestamp'] - df_history.loc[j-1, 'timestamp']) < TRANSITIONAL_THRESHOLD:
+                    while j < len(df_history) and \
+                          (df_history.loc[j, 'timestamp'] - df_history.loc[j-1, 'timestamp']) < TRANSITIONAL_THRESHOLD:
                         j += 1
                     
                     if j > i + 1: # Jika ada sequence transisi (lebih dari 1 event cepat)
@@ -945,7 +885,7 @@ with main_col3:
                 df_history_clean['timestamp'] = pd.to_datetime(df_history_clean['timestamp'])
 
                 # ... (kode dari jawaban sebelumnya untuk y_positions, tick_values, tick_texts tetap sama, 
-                #      tapi sekarang menggunakan df_history_clean sebagai input) ...
+                #       tapi sekarang menggunakan df_history_clean sebagai input) ...
 
                 TIME_JUMP_THRESHOLD = timedelta(hours=6)
                 VISUAL_JUMP_SIZE = 10.0
@@ -1005,8 +945,6 @@ with main_col3:
                     status_clean = str(row['status_to']).lower()
                     if any(term in status_clean for term in ["to do", "reopen"]):
                         colors.append('#dc3545')
-                    # if row['status_from'] is None:  # Titik awal
-                    #     colors.append('#dc3545')  # Merah
                     elif any(term in status_clean for term in ["done", "passed", "closed", "resolve"]):
                         colors.append('#198754')  # Hijau
                     elif any(term in status_clean for term in ["invalid"]):
@@ -1053,7 +991,7 @@ with main_col3:
                     fig.layout.xaxis.fixedrange = True
                     fig.layout.yaxis.fixedrange = True
                     
-                    plot_scroll_container = st.container(height=1440)
+                    plot_scroll_container = st.container(height=1240)
                     plot_scroll_container.plotly_chart(fig, config=config, use_container_width=True)
 
                 else:
@@ -1093,5 +1031,5 @@ with main_col3:
             </div>
         </div>
         """
-        comment_scroll_placeholder = st.container(height=1500) 
+        comment_scroll_placeholder = st.container(height=1300) 
         comment_scroll_placeholder.html(comment_placeholder)
