@@ -9,6 +9,7 @@ import numpy as np # Pastikan numpy diimpor karena digunakan oleh duration_to_ho
 
 import re
 from streamlit_extras.stylable_container import stylable_container
+import streamlit_antd_components as sac
 
 from utils.gdrive_conn import get_list_files, read_file_from_drive
 from utils.jira_processed import jiraProgress_proc
@@ -100,13 +101,27 @@ if "platform_filter" not in st.session_state:
 if "search_filter" not in st.session_state:
     st.session_state.search_filter = ""
 if "labels_filter" not in st.session_state:
-    st.session_state.label_filter = []
+    st.session_state.labels_filter = []
 if "stage_filter" not in st.session_state:
     st.session_state.stage_filter = []
 if "solved_filter" not in st.session_state:
     st.session_state.solved_filter = None
 if "title_filter" not in st.session_state:
     st.session_state.title_filter = ""
+    
+# Inisialisasi untuk logika pagination dan state management
+if 'current_page_col1' not in st.session_state:
+    st.session_state.current_page_col1 = 1
+if 'selected_ticket_id' not in st.session_state:
+    st.session_state.selected_ticket_id = None
+if 'selected_ticket_details' not in st.session_state:
+    st.session_state.selected_ticket_details = None
+if "last_filters" not in st.session_state:
+    st.session_state.last_filters = {}
+if 'filter_just_changed' not in st.session_state:
+    st.session_state.filter_just_changed = False
+if 'pagination_key_counter' not in st.session_state:
+    st.session_state.pagination_key_counter = 0
 
 # Wrapper function untuk tombol reset
 def reset_all_filters_wrapper(df_data: pd.DataFrame):
@@ -114,6 +129,7 @@ def reset_all_filters_wrapper(df_data: pd.DataFrame):
     Fungsi pembungkus untuk memanggil reset_jira_filters dari modul filters.py.
     """
     reset_jira_filters(df_data)
+    st.session_state.current_page_col1 = 1
 
 def svg_to_img(icon_svg):
     """
@@ -337,7 +353,27 @@ with st.expander(':material/tune: Filter', expanded=False):
             use_container_width=True,
             type="secondary" # Membuat tombol terlihat 'secondary' (biasanya abu-abu)
         )
+current_filters = {
+    "search": st.session_state.search_filter,
+    "status": st.session_state.status_filter,
+    "feature": st.session_state.feature_filter,
+    "platform": st.session_state.platform_filter,
+    "date": st.session_state.date_filter,
+    "labels": st.session_state.labels_filter,
+    "stage": st.session_state.stage_filter,
+    "solved": st.session_state.solved_filter,
+    "title": st.session_state.title_filter
+}
 
+if st.session_state.get('last_filters', {}) != current_filters:
+    st.session_state.filter_just_changed = True
+    st.session_state.current_page_col1 = 1
+    st.session_state.last_filters = current_filters
+    
+    # TAMBAHKAN INI: NAIKKAN COUNTER UNTUK MERESET VISUAL PAGINATION
+    st.session_state.pagination_key_counter += 1
+else:
+    st.session_state.filter_just_changed = False
 
 # --- Menerapkan Filter menggunakan fungsi dari filters.py ---
 df_filtered = apply_filters(
@@ -378,6 +414,10 @@ with col1:
     with stylable_container(
         key="open_tickets_metric",
         css_styles="""
+            div[data-testid="stMetricValue"] {
+                font-weight: 600;
+            }
+            
             div[data-testid="stMetric"] {
                 
                 border: 2px solid #dee2e6;
@@ -399,6 +439,10 @@ with col2:
     with stylable_container(
         key="solved_tickets_metric",
         css_styles="""
+            div[data-testid="stMetricValue"] {
+                font-weight: 600;
+            }
+        
             div[data-testid="stMetric"] {
                 
                 border: 2px solid #dee2e6;
@@ -418,8 +462,13 @@ with col2:
         
 with col3:
     with stylable_container(
-        key="solved_tickets_metric",
+        key="invalid_tickets_metric",
         css_styles="""
+        
+            div[data-testid="stMetricValue"] {
+                font-weight: 600;
+            }
+            
             div[data-testid="stMetric"] {
                 
                 border: 2px solid #dee2e6;
@@ -441,6 +490,10 @@ with col4:
     with stylable_container(
         key="average_tickets_metric",
         css_styles="""
+            div[data-testid="stMetricValue"] {
+                font-weight: 600;
+            }
+        
             div[data-testid="stMetric"] {
                 
                 border: 2px solid #dee2e6;
@@ -468,6 +521,17 @@ if 'selected_ticket_id' not in st.session_state: # ini buat nampung id tiket yan
 if 'selected_ticket_details' not in st.session_state: # ini buat nampung detail tiket yang abis dipilih user, kalo ga ada, None
     st.session_state.selected_ticket_details = None
 
+if "title_filter" not in st.session_state:
+    st.session_state.title_filter = ""
+if "last_filters" not in st.session_state:
+    st.session_state.last_filters = {}
+if 'filter_just_changed' not in st.session_state:
+    st.session_state.filter_just_changed = False
+if 'reset_counter' in st.session_state:
+    del st.session_state['reset_counter']
+if 'pagination_key_counter' not in st.session_state:
+    st.session_state.pagination_key_counter = 0
+
 
 main_col1, main_col2, main_col3 = st.columns([0.1, 0.4, 0.2])
 
@@ -478,91 +542,74 @@ with main_col1:
     else:
         
         hot_opt = ["Recent", "Hot"]
-        hot_selection = st.pills(" ", hot_opt, label_visibility='collapsed', default='Recent')
-        
+        # Saran: Tambahkan key di sini dan masukkan ke 'current_filters' agar lebih konsisten
+        hot_selection = st.pills(" ", hot_opt, label_visibility='collapsed', key="hot_filter")
         
         df_for_display = df_filtered.copy()
         if hot_selection == "Hot":
             if 'Count_Comments' in df_for_display.columns:
-                df_for_display = df_for_display[df_for_display['Count_Comments'] > 3]
+                df_for_display = df_for_display[df_for_display['Count_Comments'] > 3].reset_index(drop=True)
         elif hot_selection == "Recent":
             if 'Created' in df_for_display.columns:
                 df_for_display['Created'] = pd.to_datetime(df_for_display['Created'])
-                df_for_display = df_for_display.sort_values(by='Created', ascending=False)
+                df_for_display = df_for_display.sort_values(by='Created', ascending=False).reset_index(drop=True)
                 
         total_tickets = len(df_for_display)
-        # bikin total page dibagi sisa (//) dengan 20, misal 141 dibagi 20 sisa 7 sebelum ke koma, karena untuk mencakup sisa tiket, ditambah 1
         total_pages = (total_tickets - 1) // TICKETS_PER_PAGE + 1 if total_tickets > 0 else 1
 
+        # Logika validasi out-of-bounds ini tetap penting
         if st.session_state.current_page_col1 > total_pages:
-            st.session_state.current_page_col1 = max(1, total_pages) # ngecegah misal kalo user lagi di halaman 8, trus user make filter jadi total halaman 2, maka user akan direset ke halaman terakhir yang valid
-            # nah kenapa max(1, total_pages), karena max harus ada pembanding buat ngambil yang maksimal
-
-        # ini buat dapet index awal dari tiket df, jadi kalo user emang lagi di halaman 1, maka dikurang 1 (0) * 20 = 0 <- index awal
-        # kalo misal start_idx = user lagi di halaman 2, maka 2-1 * 20 = 20 <- ini yg jadi index awal
-        start_idx = (st.session_state.current_page_col1 - 1) * TICKETS_PER_PAGE
+            st.session_state.current_page_col1 = 1
+        
+        current_page = st.session_state.get('current_page_col1', 1)
+        
+        start_idx = (current_page - 1) * TICKETS_PER_PAGE
         end_idx = min(start_idx + TICKETS_PER_PAGE, total_tickets)
         
         tickets_to_display = df_for_display.iloc[start_idx:end_idx]
         
-        ticket_list_container = st.container(height=1130, border=False)
+        ticket_list_container = st.container(height=1190, border=False)
         with ticket_list_container:
             if tickets_to_display.empty:
                 st.write("There are no tickets to display on this page.")
             else:
                 for index, row in tickets_to_display.iterrows():
+                    # ... (kode looping tombol tiketmu tetap sama)
                     ticket_id = str(row['Tickets'])
                     ticket_title = str(row['Title'])
-                    # Ambil jumlah komen dari kolom 'Count_Comments'
-                    # Pakai .get() lebih aman, kalau kolomnya nggak ada, dia nggak error
-                    comment_count = row.get('Count_Comments', 0) 
-                    
-                    # Logika pemotongan judul tetap dipertahankan
-                    shortened_title = ticket_title 
+                    comment_count = row.get('Count_Comments', 0)
+                    shortened_title = ticket_title
                     try:
                         title_parts = ticket_title.split(' - ')
-                        if len(title_parts) > 2:
-                            shortened_title = title_parts[2].strip()
-                        else:
-                            shortened_title = title_parts[-1].strip()
+                        shortened_title = title_parts[2].strip() if len(title_parts) > 2 else title_parts[-1].strip()
                     except Exception:
                         shortened_title = ticket_title
-                    
-                    button_key = f"select_{ticket_id}_{start_idx + index}_{st.session_state.current_page_col1}" # Button key lebih unik lagi
-                    
-                        
+                    button_key = f"select_{ticket_id}"
                     indicator = "🔥 " if comment_count > 3 else ""
-            
-                    # 2. Gabungkan indicator ke dalam label tombol
                     button_label = f"{indicator}**{ticket_id}**: {shortened_title}"
-                    
-                    # 3. Gunakan label baru ini di tombol lo
                     if st.button(button_label, key=button_key, use_container_width=True):
                         st.session_state.selected_ticket_id = ticket_id
                         st.session_state.selected_ticket_details = row.to_dict()
-
+                        
         if total_pages > 1:
-            st.markdown("---")
-            nav_cols = st.columns([1, 1, 2, 1, 1])
-            with nav_cols[0]:
-                if st.button(":material/first_page:", key="pg_first_col1", disabled=(st.session_state.current_page_col1 == 1), use_container_width=True):
-                    st.session_state.current_page_col1 = 1
-                    st.rerun()
-            with nav_cols[1]:
-                if st.button(":material/chevron_left:", key="pg_prev_col1", disabled=(st.session_state.current_page_col1 == 1), use_container_width=True):
-                    st.session_state.current_page_col1 -= 1
-                    st.rerun()
-            with nav_cols[2]:
-                st.write(f"<div style='text-align: center; margin-top: 0.5em;'> {st.session_state.current_page_col1} / {total_pages}</div>", unsafe_allow_html=True)
-            with nav_cols[3]:
-                if st.button(":material/chevron_right:", key="pg_next_col1", disabled=(st.session_state.current_page_col1 == total_pages), use_container_width=True):
-                    st.session_state.current_page_col1 += 1
-                    st.rerun()
-            with nav_cols[4]:
-                if st.button(":material/last_page:", key="pg_last_col1", disabled=(st.session_state.current_page_col1 == total_pages), use_container_width=True):
-                    st.session_state.current_page_col1 = total_pages
-                    st.rerun()
-
+            st.markdown("<div style='margin-top:20px;'> </div>", unsafe_allow_html=True)
+            new_page = sac.pagination(
+                total=total_tickets,
+                page_size=TICKETS_PER_PAGE,
+                align='start',
+                variant='light',
+                size='md',
+                color='green',
+                show_total=False,
+                simple=True,
+                key=f"sac_pagination_col1_{st.session_state.pagination_key_counter}"
+            )
+            
+            # Logika di bawah ini tetap sama dan sudah benar
+            if not st.session_state.filter_just_changed and new_page != current_page:
+                st.session_state.current_page_col1 = new_page
+                st.rerun()
+                
 with main_col2:
     
     details_container = st.container(height=1300, key='main_col2', border=True) 

@@ -350,4 +350,3 @@ solved_tickets_df['duration_hours'] = solved_tickets_df['Duration_toResolve'].ap
 avg_duration_in_hours = solved_tickets_df['duration_hours'].mean()
 formatted_avg_duration = format_hours_to_days_hours(avg_duration_in_hours)
 
-st.dataframe(df_filtered)

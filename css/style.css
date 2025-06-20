@@ -26,7 +26,7 @@ html, body, [class*="css"] {
 
 /* (Opsional) Atur tinggi tombol secara eksplisit jika perlu */
 div[class*="st-key-select_"] button {
-    height: 100px; /* Sesuaikan angka ini untuk tinggi tombol yang pas */
+    height: 80px; /* Sesuaikan angka ini untuk tinggi tombol yang pas */
     display: flex;
     justify-content: left;
     align-items: left;
