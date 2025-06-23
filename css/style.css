@@ -12,18 +12,15 @@
     color: #333; /* Warna hitam atau abu tua agar mudah dibaca */
 }
 
-
-
-/* (Opsional) Atur tinggi tombol secara eksplisit jika perlu */
 div[class*="st-key-select_"] button {
     height: 80px; /* Sesuaikan angka ini untuk tinggi tombol yang pas */
     display: flex;
     justify-content: left;
     align-items: left;
     text-align: left;
+    padding-right: 20px;
     background-color: #F6F6F6;
     border: 2px solid #dee2e6;
     border-radius: 15px;
     transition: background-color 0.2s, border-color 0.2s;
 }
-

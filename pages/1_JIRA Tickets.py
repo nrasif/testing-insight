@@ -417,109 +417,74 @@ avg_duration_in_hours = solved_tickets_df['duration_hours'].mean()
 formatted_avg_duration = format_hours_to_days_hours(avg_duration_in_hours)
 
 
-# 4. Tampilkan metrik
+# Definisikan palet warna tema hijau-mu sekali lagi
+THEME_GREEN = "#24b24c"
+THEME_GREEN_DARK = "#1A7D36"
+BACKGROUD_COLOR = "#f6f6f6"
+BORDER_LIGHT = "#e0e0e0"
+
+# Buat satu "Master Style" untuk semua kartu metrik
+METRIC_CARD_STYLE = f"""
+    /* Gaya untuk font value (angka utama) */
+    div[data-testid="stMetricValue"] {{
+        font-weight: 600;
+    }}
+
+    /* Gaya dasar untuk SEMUA kartu metrik */
+    div[data-testid="stMetric"] {{
+        background-color: #f6f6f6; /* Pastikan background putih */
+        border: 2px solid {BORDER_LIGHT};
+        border-radius: 1rem; /* 16px */
+        padding: 1rem; /* Beri sedikit padding internal */
+        transition: all 0.2s ease-in-out; /* Animasi halus untuk semua perubahan */
+    }}
+
+    /* Gaya kartu saat di-hover (meniru style 'selected') */
+    div[data-testid="stMetric"]:hover {{
+        background-color: {BACKGROUD_COLOR};
+        border-color: {THEME_GREEN};
+        
+        /* Efek 'terangkat' yang lebih modern */
+        transform: translateY(-1px);
+    }}
+    
+    /* Ganti warna teks di dalam kartu saat kartu di-hover */
+    div[data-testid="stMetric"]:hover p {{
+        color: {THEME_GREEN_DARK};
+    }}
+"""
+
+
+# Tampilkan metrik dengan style yang sudah kita siapkan
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     with stylable_container(
         key="open_tickets_metric",
-        css_styles="""
-            div[data-testid="stMetricValue"] {
-                font-weight: 600;
-            }
-            
-            div[data-testid="stMetric"] {
-                
-                border: 2px solid #dee2e6;
-                border-radius: 1rem;
-                transition: all 0.2s ease-in-out;
-            }
-
-            div[data-testid="stMetric"]:hover {
-                
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-                transform: scale(1.01);
-                z-index: 10;
-            }
-            """
+        css_styles=METRIC_CARD_STYLE  # Gunakan master style
     ):
-        st.metric("Total Open Tickets", f"{total_open_tickets}", border=True, help='Ticket that is not solved with status include everything except "Resolve" and "Invalid"' )
+        st.metric("Total Open Tickets", f"{total_open_tickets}", help='Ticket that is not solved with status include everything except "Resolve" and "Invalid"')
 
 with col2:
     with stylable_container(
         key="solved_tickets_metric",
-        css_styles="""
-            div[data-testid="stMetricValue"] {
-                font-weight: 600;
-            }
-        
-            div[data-testid="stMetric"] {
-                
-                border: 2px solid #dee2e6;
-                border-radius: 1rem;
-                transition: all 0.2s ease-in-out;
-            }
-
-            div[data-testid="stMetric"]:hover {
-                
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-                transform: scale(1.01);
-                z-index: 10;
-            }
-            """
+        css_styles=METRIC_CARD_STYLE  # Gunakan master style yang sama
     ):
-        st.metric("Solved Tickets", f"{total_solved_tickets}", border=True, help='Ticket that is solved')
+        st.metric("Solved Tickets", f"{total_solved_tickets}", help='Ticket that is solved')
         
 with col3:
     with stylable_container(
         key="invalid_tickets_metric",
-        css_styles="""
-        
-            div[data-testid="stMetricValue"] {
-                font-weight: 600;
-            }
-            
-            div[data-testid="stMetric"] {
-                
-                border: 2px solid #dee2e6;
-                border-radius: 1rem;
-                transition: all 0.2s ease-in-out;
-            }
-
-            div[data-testid="stMetric"]:hover {
-                
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-                transform: scale(1.01);
-                z-index: 10;
-            }
-            """
+        css_styles=METRIC_CARD_STYLE  # Gunakan master style yang sama
     ):
-        st.metric("Invalid Ticket", f"{total_invalid_ticket}", border=True, help='Ticket that is Invalid')
+        st.metric("Invalid Ticket", f"{total_invalid_ticket}", help='Ticket that is Invalid')
 
 with col4:
     with stylable_container(
         key="average_tickets_metric",
-        css_styles="""
-            div[data-testid="stMetricValue"] {
-                font-weight: 600;
-            }
-        
-            div[data-testid="stMetric"] {
-                
-                border: 2px solid #dee2e6;
-                border-radius: 1rem;
-                transition: all 0.2s ease-in-out;
-            }
-
-            div[data-testid="stMetric"]:hover {
-                
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-                transform: scale(1.01);
-                z-index: 10;
-            }
-            """
+        css_styles=METRIC_CARD_STYLE  # Gunakan master style yang sama
     ):
-        st.metric("Average Time to Solved", formatted_avg_duration, border=True, help='Average time for ticket to solved or closed')
+        st.metric("Average Time to Solved", formatted_avg_duration, help='Average time for ticket to solved or closed')
         
 st.markdown("<div style='margin-top:40px;'> </div>", unsafe_allow_html=True)
 
@@ -619,6 +584,7 @@ with main_col1:
             if not st.session_state.filter_just_changed and new_page != current_page:
                 st.session_state.current_page_col1 = new_page
                 st.rerun()
+
                 
 with main_col2:
     
@@ -644,7 +610,7 @@ with main_col2:
             font-size: 0.85em;
             font-weight: 600;
             color: white;
-            background-color: #EAEAEA; /* Warna biru primer */
+            background-color: #EAEAEA;
             border: none;
             border-radius: 5px;
             text-decoration: none;
