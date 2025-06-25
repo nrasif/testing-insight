@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from utils.jira_processed import jiraProgress_proc
+from components.metrics import display_summary_metrics
 from datetime import datetime, timedelta
 import urllib.parse
 import json
@@ -399,10 +400,10 @@ df_filtered = apply_filters(
     st.session_state.title_filter
 )
 
-
-
 # 1. Konversi kolom waktu
 df_filtered['Resolved_Time'] = pd.to_datetime(df_filtered['Resolved_Time'], errors='coerce')
+
+total_tickets = len(df_filtered.index)
 
 # 2. Hitung tiket open & solved
 total_open_tickets = (df_filtered['Resolved_Time'].isna() & (df_filtered['Status'] != 'Invalid')).sum()
@@ -454,39 +455,16 @@ METRIC_CARD_STYLE = f"""
     }}
 """
 
+display_summary_metrics(
+    total_tickets=total_tickets,
+    total_open_tickets=total_open_tickets,
+    total_solved_tickets=total_solved_tickets,
+    total_invalid_ticket=total_invalid_ticket,
+    formatted_avg_duration=formatted_avg_duration,
+    metric_card_style=METRIC_CARD_STYLE
+)
 
-# Tampilkan metrik dengan style yang sudah kita siapkan
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    with stylable_container(
-        key="open_tickets_metric",
-        css_styles=METRIC_CARD_STYLE  # Gunakan master style
-    ):
-        st.metric("Total Open Tickets", f"{total_open_tickets}", help='Ticket that is not solved with status include everything except "Resolve" and "Invalid"')
-
-with col2:
-    with stylable_container(
-        key="solved_tickets_metric",
-        css_styles=METRIC_CARD_STYLE  # Gunakan master style yang sama
-    ):
-        st.metric("Solved Tickets", f"{total_solved_tickets}", help='Ticket that is solved')
-        
-with col3:
-    with stylable_container(
-        key="invalid_tickets_metric",
-        css_styles=METRIC_CARD_STYLE  # Gunakan master style yang sama
-    ):
-        st.metric("Invalid Ticket", f"{total_invalid_ticket}", help='Ticket that is Invalid')
-
-with col4:
-    with stylable_container(
-        key="average_tickets_metric",
-        css_styles=METRIC_CARD_STYLE  # Gunakan master style yang sama
-    ):
-        st.metric("Average Time to Solved", formatted_avg_duration, help='Average time for ticket to solved or closed')
-        
-st.markdown("<div style='margin-top:40px;'> </div>", unsafe_allow_html=True)
+st.html('<div style="margin-bottom: 20px;"></div>')
 
 # Session State
 if 'current_page_col1' not in st.session_state: # ini page si user disimpen ke dalem session_state, kalo misal baru, halaman 1
@@ -709,7 +687,7 @@ with main_col2:
         col1_content += "</div>"
         details_html += col1_content
 
-        col2_content = "<div style='background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; height: 100%;'>"
+        col2_content = "<div class='desc-hover'>"
         col2_content += "<p style='font-size: 0.8em; color: #495057; margin-top: 0; margin-bottom: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;'>Additional Information</p>"
         
         readable_date_format = '%d %B %Y, %H:%M'

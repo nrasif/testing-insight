@@ -1,15 +1,33 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import re
 from datetime import datetime #
 from utils.jira_processed import jiraProgress_proc
 from datetime import datetime, timedelta
 
+import altair as alt
+import plotly.express as px
+import plotly.graph_objects as go
+
+from streamlit_extras.stylable_container import stylable_container
+from st_keyup import st_keyup
+
 from utils.gdrive_conn import get_list_files, read_file_from_drive
 from utils.jira_processed import jiraProgress_proc
 from components.filters import apply_filters, reset_jira_filters
+from components.metrics import display_summary_metrics
 
 st.set_page_config(page_title='BSI Testing Insight', layout='wide')
+
+def truncate_feature_name(name, max_words=2):
+    """Memotong string menjadi maksimal N kata dan menambahkan '...' jika lebih panjang."""
+    words = name.split()
+    if len(words) > max_words:
+        return ' '.join(words[:max_words]) + ' ...'
+    else:
+        return name
+
 st.html("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
@@ -343,6 +361,8 @@ df_filtered = apply_filters(
 
 df_filtered['Resolved_Time'] = pd.to_datetime(df_filtered['Resolved_Time'], errors='coerce')
 
+total_tickets = len(df_filtered.index)
+
 total_open_tickets = (df_filtered['Resolved_Time'].isna() & (df_filtered['Status'] != 'Invalid')).sum()
 total_solved_tickets = (df_filtered['Resolved_Time'].notna()).sum()
 total_invalid_ticket = (df_filtered['Status'] == 'Invalid').sum()
@@ -353,3 +373,243 @@ avg_duration_in_hours = solved_tickets_df['duration_hours'].mean()
 formatted_avg_duration = format_hours_to_days_hours(avg_duration_in_hours)
 
 
+# Definisikan palet warna tema hijau-mu sekali lagi
+THEME_GREEN = "#24b24c"
+THEME_GREEN_DARK = "#1A7D36"
+BACKGROUD_COLOR = "#f6f6f6"
+BORDER_LIGHT = "#e0e0e0"
+
+# Buat satu "Master Style" untuk semua kartu metrik
+METRIC_CARD_STYLE = f"""
+    /* Gaya untuk font value (angka utama) */
+    div[data-testid="stMetricValue"] {{
+        font-weight: 600;
+    }}
+
+    /* Gaya dasar untuk SEMUA kartu metrik */
+    div[data-testid="stMetric"] {{
+        background-color: #f6f6f6; /* Pastikan background putih */
+        border: 2px solid {BORDER_LIGHT};
+        border-radius: 1rem; /* 16px */
+        padding: 1rem; /* Beri sedikit padding internal */
+        transition: all 0.2s ease-in-out; /* Animasi halus untuk semua perubahan */
+    }}
+
+    /* Gaya kartu saat di-hover (meniru style 'selected') */
+    div[data-testid="stMetric"]:hover {{
+        background-color: {BACKGROUD_COLOR};
+        border-color: {THEME_GREEN};
+        
+        /* Efek 'terangkat' yang lebih modern */
+        transform: translateY(-1px);
+    }}
+    
+    /* Ganti warna teks di dalam kartu saat kartu di-hover */
+    div[data-testid="stMetric"]:hover p {{
+        color: {THEME_GREEN_DARK};
+    }}
+"""
+
+display_summary_metrics(
+    total_tickets=total_tickets,
+    total_open_tickets=total_open_tickets,
+    total_solved_tickets=total_solved_tickets,
+    total_invalid_ticket=total_invalid_ticket,
+    formatted_avg_duration=formatted_avg_duration,
+    metric_card_style=METRIC_CARD_STYLE
+)
+
+st.html('<div style="margin-top: 20px;"> </div>')
+
+
+col1, col2 = st.columns([1.5,2.5])
+
+with col1:
+
+    valid_status = ['Highest', 'Medium', 'Low']
+    df_final = df_filtered[df_filtered['Severity'].isin(valid_status)].copy()
+
+    chart_data = df_final.groupby(['Feature', 'Severity']).size().reset_index(name='Total Tickets') # bikin total tiket
+    chart_data['Feature_Display'] = chart_data['Feature'].apply(truncate_feature_name)
+
+
+    color_scheme = {'Highest': '#E63946', 'Medium': '#FCA311', 'Low': '#147DF5'}
+    unique_features = chart_data['Feature'].unique() if not chart_data.empty else []
+    plot_height = len(unique_features) * 40
+    if plot_height < 400: plot_height = 400
+
+    if not chart_data.empty:
+        css_styles = """
+            {
+                border: 2px solid #e6e6e6;
+                border-radius: 10px;
+                padding: 20px;
+                height: 500px;
+                overflow-y: auto;
+                background-color: #F6f6f6;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            }
+            /* Kustomisasi scrollbar (opsional, tapi keren) */
+            &::-webkit-scrollbar { width: 8px; }
+            &::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+            &::-webkit-scrollbar-thumb { background: #cccccc; border-radius: 10px; }
+            &::-webkit-scrollbar-thumb:hover { background: #aaaaaa; }
+        """
+
+        with stylable_container(key="plot_container", css_styles=css_styles):
+            
+            st.markdown(':material/device_thermostat: **Severity per Feature**', 
+                        help='Shows how many tickets and their severity each feature got — X-axis: ticket count, Y-axis: feature names.')
+
+            fig = px.bar(
+                chart_data,
+                x='Total Tickets', 
+                y='Feature_Display',  # Gunakan kolom yang sudah dipotong untuk sumbu Y
+                color='Severity', 
+                orientation='h',
+                color_discrete_map={'Highest': '#E63946', 'Medium': '#FCA311', 'Low': '#147DF5'}, 
+                height=plot_height,
+                labels={'Feature_Display': 'Fitur'}, # Label sumbu Y
+                custom_data=['Feature'] # Simpan nama asli fitur untuk tooltip
+            )
+            
+            # Kustomisasi layout dan tooltip
+            fig.update_layout(
+                yaxis={'categoryorder':'total ascending', 'title':{'standoff':10}},
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                legend_title_text='Severity',
+                margin=dict(l=10, r=10, t=0, b=10)
+            )
+            
+            # Kustomisasi tooltip untuk menampilkan nama fitur yang asli (full)
+            fig.update_traces(
+                hovertemplate="<b>Feature: %{customdata[0]}</b><br>" +
+                            "Severity: %{fullData.name}<br>" +
+                            "Total Tickets: %{x}<extra></extra>"
+            )
+            
+            fig.layout.xaxis.fixedrange = True
+            fig.layout.yaxis.fixedrange = True
+            
+            config = {'displayModeBar': False}
+            
+            
+            st.plotly_chart(fig, config=config, use_container_width=True)
+    else:
+        st.warning(f"No tickets found with features matching the filter")
+        
+    with stylable_container(key="plot_container", css_styles=css_styles):
+        st.markdown(':material/database: **Data**', 
+            help='Shows how many tickets and their severity each feature got — X-axis: ticket count, Y-axis: feature names.')
+        st.dataframe(df_filtered[['Tickets', 'Feature', 'Title', 'Severity', 'Status', 'Reporter', 'Assignee', 'Created', 'Labels', 'Device', 'Stage', 'Fix_Versions', 'Testing_Time', 'Squad']])
+            
+
+    
+with col2:
+
+    css_styles = """
+    {
+        border: 2px solid #e6e6e6;
+        border-radius: 10px;
+        padding: 20px;
+        background-color: #F6f6f6;
+        height: 500px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    }
+    """
+    
+    # Gunakan styleable_container untuk membungkus plot
+    with stylable_container(key="styled_plot_container", css_styles=css_styles):
+        st.markdown(':material/confirmation_number: **Ticket Status Overview (Open, Closed, Invalid)**', 
+                    help='Shows the composition of open, closed, and invalid tickets for each feature. X-axis: feature names, Y-axis: ticket count.')
+
+        if not df_filtered.empty:
+            df_plot2 = df_filtered.copy()
+            
+            # Persiapan Data (Sama seperti sebelumnya)
+            solved_states = ['Done', 'RESOLVE', 'Resolve', 'Done.', 'DONE']
+            invalid_states = ['Invalid']
+
+            def categorize_ticket_state(status):
+                if status in solved_states: return 'Closed'
+                elif status in invalid_states: return 'Invalid'
+                else: return 'Open'
+            
+            df_plot2['Ticket_State'] = df_plot2['Status'].apply(categorize_ticket_state)
+            
+            feature_order = df_plot2['Feature'].value_counts().index
+            
+            chart_data2 = df_plot2.groupby(['Feature', 'Ticket_State']).size().reset_index(name='Jumlah Tiket')
+            pivot_df = chart_data2.pivot(index='Feature', columns='Ticket_State', values='Jumlah Tiket').fillna(0)
+            pivot_df = pivot_df.reindex(feature_order)
+            
+            
+            truncated_labels = pivot_df.index.map(lambda name: truncate_feature_name(name, max_words=2))
+            
+
+            fig2 = go.Figure()
+
+            status_order = ['Closed', 'Invalid', 'Open']
+            colors = {'Open': '#2C497F', 'Closed': '#24b24c', 'Invalid': "#9C9C9C"}
+
+            for i, status in enumerate(status_order):
+                if status not in pivot_df.columns:
+                    continue
+
+                is_top_layer = (i == len(status_order) - 1)
+                radius = 10 if is_top_layer else 0
+
+                fig2.add_trace(go.Bar(
+                    name=status,
+                    x=truncated_labels, # <- label yang udah dipotong
+                    y=pivot_df[status],
+                    hovertext=pivot_df.index, # <- Simpan nama lengkap untuk hover
+                    marker=dict(
+                        color=colors[status],
+                        cornerradius=radius,
+                        # line=dict(width=2, color='rgba(246, 246, 246, 1)')
+                    ),
+                    text=pivot_df[status].apply(lambda x: int(x) if x > 0 else ''),
+                    textposition='inside',
+                    textfont=dict(color='white'),
+                    # Kustomisasi hover untuk menampilkan nama lengkap
+                    hovertemplate='<b>%{hovertext}</b><br>' + f'{status}: %{{y}}<extra></extra>'
+                ))
+
+            # Poles Tampilan (Aesthetic)
+            fig2.update_layout(
+                barmode='stack',
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(
+                    showgrid=False,
+                    tickfont=dict(size=12, family='sans-serif'),
+                    categoryorder='array',
+                    categoryarray=truncated_labels # <-- Gunakan label terpotong untuk pengurutan
+                ),
+                yaxis=dict(
+                    showgrid=False,
+                    visible=False
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    title_text="",
+                    font=dict(family="sans-serif", size=12)
+                ),
+                height=400,
+                margin=dict(l=10, r=10, t=80, b=10),
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=14,
+                    font_family="sans-serif"
+                )
+            )
+            
+            st.plotly_chart(fig2, use_container_width=True)
+
+        else:
+            st.info("Tidak ada data tiket untuk divisualisasikan dengan filter yang dipilih.")

@@ -23,6 +23,9 @@ pages = {
         st.Page("pages/3_QAChatbot.py", title="Chatbot"),
         st.Page("pages/4_Knowledge Center.py", title="Documentation")
     ],
+    "Made with 💚 by Nahari Rasif" : [
+        st.Page("pages/5_About.py", title="About Author")
+    ]
 }
 
 # Create the navigation object

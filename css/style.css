@@ -24,3 +24,19 @@ div[class*="st-key-select_"] button {
     border-radius: 15px;
     transition: background-color 0.2s, border-color 0.2s;
 }
+
+.desc-hover {
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 10px;
+    padding: 20px;
+    height: 100%;
+    transition: all 0.2s ease-in-out;
+}
+
+/* Style saat kursor diarahkan ke elemen .card-hover */
+.desc-hover:hover {
+    /* Efek 'terangkat' */
+    transform: translateY(-2px);
+    border: 2px solid #28a745;
+}
