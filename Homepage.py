@@ -15,14 +15,14 @@ def get_image_as_base64(path):
         return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mN8/x8AAuMB8DtXNJsAAAAASUVORK5CYII="
 
 pages = {
-    "JIRA": [
+    "JIRA Menu": [
         st.Page("pages/1_JIRA Tickets.py", title="JIRA View"),
-        st.Page("pages/2_JIRA Dashboard.py", title="Dashboard")
+        st.Page("pages/2_JIRA Dashboard.py", title="JIRA Dashboard")
     ],
-    "Knowledge Center": [
-        st.Page("pages/3_QAChatbot.py", title="Chatbot"),
-        st.Page("pages/4_Knowledge Center.py", title="Documentation")
-    ],
+    # "Knowledge Center": [
+    #     st.Page("pages/3_QAChatbot.py", title="Chatbot"),
+    #     st.Page("pages/4_Knowledge Center.py", title="Documentation")
+    # ],
     "Made with 💚 by Nahari Rasif" : [
         st.Page("pages/5_About.py", title="About Author")
     ]

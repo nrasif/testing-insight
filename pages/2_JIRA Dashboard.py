@@ -18,6 +18,8 @@ from utils.jira_processed import jiraProgress_proc
 from components.filters import apply_filters, reset_jira_filters
 from components.metrics import display_summary_metrics
 
+import json
+
 st.set_page_config(page_title='BSI Testing Insight', layout='wide')
 
 def truncate_feature_name(name, max_words=2):
@@ -478,6 +480,9 @@ with col1:
                 yaxis={'categoryorder':'total ascending', 'title':{'standoff':10}},
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 legend_title_text='Severity',
+                xaxis=dict(
+                    showgrid=True,
+                ),
                 margin=dict(l=10, r=10, t=0, b=10)
             )
             
@@ -499,8 +504,8 @@ with col1:
         st.warning(f"No tickets found with features matching the filter")
         
     with stylable_container(key="plot_container", css_styles=css_styles):
-        st.markdown(':material/database: **Data**', 
-            help='Shows how many tickets and their severity each feature got — X-axis: ticket count, Y-axis: feature names.')
+        st.markdown(':material/database: **Detailed Data**', 
+            help='Shows detailed tickets and other parameters')
         st.dataframe(df_filtered[['Tickets', 'Feature', 'Title', 'Severity', 'Status', 'Reporter', 'Assignee', 'Created', 'Labels', 'Device', 'Stage', 'Fix_Versions', 'Testing_Time', 'Squad']])
             
 
@@ -582,14 +587,14 @@ with col2:
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
                 xaxis=dict(
-                    showgrid=False,
+                    showgrid=True,
                     tickfont=dict(size=12, family='sans-serif'),
                     categoryorder='array',
                     categoryarray=truncated_labels # <-- Gunakan label terpotong untuk pengurutan
                 ),
                 yaxis=dict(
-                    showgrid=False,
-                    visible=False
+                    showgrid=True,
+                    visible=True
                 ),
                 legend=dict(
                     orientation="h",
@@ -601,7 +606,7 @@ with col2:
                     font=dict(family="sans-serif", size=12)
                 ),
                 height=400,
-                margin=dict(l=10, r=10, t=80, b=10),
+                margin=dict(l=10, r=10, t=80, b=0),
                 hoverlabel=dict(
                     bgcolor="white",
                     font_size=14,
@@ -613,3 +618,124 @@ with col2:
 
         else:
             st.info("Tidak ada data tiket untuk divisualisasikan dengan filter yang dipilih.")
+    
+    st.markdown("Daily Ticket Activity (Opened vs. Solved)", 
+                help="This chart shows the daily number of tickets opened/reopened versus tickets solved.")
+
+    # FUNGSI DIPERBARUI: Menghitung data harian, bukan kumulatif
+    @st.cache_data
+    def prepare_daily_activity_data(df):
+        """
+        Memproses seluruh DataFrame untuk mengekstrak event 'open' dan 'solved'
+        dan menghitung jumlahnya per hari.
+        """
+        all_events = []
+        
+        solved_states = ['Done', 'RESOLVE', 'Resolve', 'Done.', 'DONE', 'Closed']
+        reopen_states = ['Reopened', 'REOPEN']
+        invalid_states = ['Invalid']
+
+        for index, row in df.iterrows():
+            history_json_str = row.get('Status_History_JSON')
+            if not history_json_str or not isinstance(history_json_str, str):
+                continue
+
+            try:
+                history_data = json.loads(history_json_str)
+                if not isinstance(history_data, list): continue
+
+                for event in history_data:
+                    timestamp = pd.to_datetime(event.get('timestamp'))
+                    status_to = event.get('status_to')
+                    status_from = event.get('status_from')
+
+                    if status_from is None:
+                        all_events.append({'date': timestamp.date(), 'type': 'open'})
+                    elif status_to in reopen_states:
+                        all_events.append({'date': timestamp.date(), 'type': 'open'})
+                    elif status_to in solved_states:
+                        all_events.append({'date': timestamp.date(), 'type': 'solved'})
+                    elif status_to in invalid_states:
+                        all_events.append({'date': timestamp.date(), 'type': 'invalid'})
+            except (json.JSONDecodeError, TypeError):
+                continue
+                
+        if not all_events:
+            return pd.DataFrame()
+
+        events_df = pd.DataFrame(all_events)
+        daily_counts = events_df.groupby(['date', 'type']).size().unstack(fill_value=0)
+
+        # Pastikan kedua kolom ada
+        if 'open' not in daily_counts:
+            daily_counts['open'] = 0
+        if 'solved' not in daily_counts:
+            daily_counts['solved'] = 0
+        if 'invalid' not in daily_counts:
+            daily_counts['invalid'] = 0
+        
+        # KUNCI PERUBAHAN: .cumsum() DIHAPUS untuk mendapatkan data harian
+        # Kita juga reindex untuk memastikan semua hari ada dalam rentang waktu
+        full_date_range = pd.date_range(start=daily_counts.index.min(), end=daily_counts.index.max(), freq='D')
+        daily_counts = daily_counts.reindex(full_date_range, fill_value=0)
+        
+        return daily_counts
+
+    # Pastikan df_filtered ada sebelum menjalankan proses
+    if 'df_filtered' in locals() and not df_filtered.empty:
+        with st.spinner('Analyzing daily ticket activity...'):
+            daily_df = prepare_daily_activity_data(df_filtered)
+
+        if not daily_df.empty:
+            # --- Buat Plot Bar dengan Plotly Graph Objects ---
+            fig_activity = go.Figure()
+
+            # Batang untuk Opened/Reopened
+            fig_activity.add_trace(go.Bar(
+                x=daily_df.index,
+                y=daily_df['open'],
+                name='Opened / Reopened',
+                marker_color = '#2C497F'
+            ))
+
+            # Batang untuk Solved
+            fig_activity.add_trace(go.Bar(
+                x=daily_df.index,
+                y=daily_df['solved'],
+                name='Closed',
+                marker_color='#24b24c'
+            ))
+            
+            fig_activity.add_trace(go.Bar(
+                x=daily_df.index,
+                y=daily_df['invalid'],
+                name='Invalid',
+                marker_color='#636363'
+            ))
+
+            # --- Poles Tampilan (Aesthetic) ---
+            fig_activity.update_layout(
+                barmode='group', 
+                template='plotly_white',
+                hovermode='x unified',
+                xaxis=dict(
+                    title='Date',
+                    rangeslider=dict(visible=True),
+                ),
+                yaxis=dict(
+                    title='Daily Ticket Count',
+                    side='right' # <-- Sumbu Y tetap di kanan
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
+            )
+            st.plotly_chart(fig_activity, use_container_width=True)
+        else:
+            st.info("No valid ticket history data found in the filtered dataset to generate an activity plot.")
+    else:
+        st.warning("Please filter the data first to see the daily activity.")
