@@ -364,6 +364,11 @@ with st.expander(':material/tune: Filter', expanded=False):
             use_container_width=True,
             type="secondary" # Membuat tombol terlihat 'secondary' (biasanya abu-abu)
         )
+    
+    
+    options_data = ['PTR 1.1.0', 'SITBAU 1.1.0 GS 9.10.1', 'PTR 1.1.0 GS 9.10.1', 'SITBAU Always On 1.1.0', 'PTR Always On 1.1.0']
+    st.pills("Quick filter by project:", options_data, selection_mode="single", key="pills_selection")
+    
 current_filters = {
     "search": st.session_state.search_filter,
     "status": st.session_state.status_filter,
@@ -373,7 +378,7 @@ current_filters = {
     "labels": st.session_state.labels_filter,
     "stage": st.session_state.stage_filter,
     "solved": st.session_state.solved_filter,
-    "title": st.session_state.title_filter
+    "title": st.session_state.title_filter,
 }
 
 if st.session_state.get('last_filters', {}) != current_filters:
@@ -397,7 +402,8 @@ df_filtered = apply_filters(
     st.session_state.labels_filter,
     st.session_state.stage_filter,
     st.session_state.solved_filter,
-    st.session_state.title_filter
+    st.session_state.title_filter,
+    st.session_state.pills_selection
 )
 
 # 1. Konversi kolom waktu

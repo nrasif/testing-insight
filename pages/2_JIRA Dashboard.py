@@ -392,6 +392,9 @@ with st.expander(':material/tune: Filter', expanded=False):
             use_container_width=True,
             type="secondary" # Membuat tombol terlihat 'secondary' (biasanya abu-abu)
         )
+    
+    options_data = ['PTR 1.1.0', 'SITBAU 1.1.0 GS 9.10.1', 'PTR 1.1.0 GS 9.10.1', 'SITBAU Always On 1.1.0', 'PTR Always On 1.1.0']
+    st.pills("Quick filter by project:", options_data, selection_mode="single", key="pills_selection")
 
 df_filtered = apply_filters(
     df_jira_original,
@@ -403,7 +406,8 @@ df_filtered = apply_filters(
     st.session_state.labels_filter,
     st.session_state.stage_filter,
     st.session_state.solved_filter,
-    st.session_state.title_filter
+    st.session_state.title_filter,
+    st.session_state.pills_selection
 )
 
 
@@ -466,37 +470,6 @@ display_summary_metrics(
     formatted_avg_duration=formatted_avg_duration,
     metric_card_style=METRIC_CARD_STYLE
 )
-
-options_data = ['PTR 1.1.0', 'SITBAU 1.1.0 GS 9.10.1', 'PTR 1.1.0 GS 9.10.1', 'SITBAU Always On 1.1.0', 'PTR Always On 1.1.0']
-selection_data = st.pills(" ", options_data, selection_mode="single")
-
-if selection_data == 'PTR 1.1.0':
-    df_filtered = df_filtered[df_filtered['Title'].str.contains('PTR 1.1.0', na=False)]
-    
-if selection_data == "SITBAU 1.1.0 GS 9.10.1":
-    df_filtered = df_filtered[
-        (df_filtered['Title'].str.contains('GS 9.10.1', na=False)) & 
-        (df_filtered['Stage'] == 'Regression')
-    ]
-
-if selection_data == "PTR 1.1.0 GS 9.10.1":
-    df_filtered = df_filtered[
-        (df_filtered['Title'].str.contains('GS 9.10.1', na=False)) & 
-        (df_filtered['Stage'] == 'PTR')
-    ]
-    
-if selection_data == "SITBAU Always On 1.1.0":
-    df_filtered = df_filtered[
-        (df_filtered['Title'].str.contains('Always On', na=False)) & 
-        (df_filtered['Stage'] == 'Regression')
-    ]
-
-if selection_data == "PTR Always On 1.1.0":
-    df_filtered = df_filtered[
-        (df_filtered['Title'].str.contains('Always On', na=False)) & 
-        (df_filtered['Stage'] == 'PTR')
-    ]
-
 
 
 col1, col2 = st.columns([1.5,2.5])
