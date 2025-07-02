@@ -901,7 +901,7 @@ with col1:
                                 st.caption("No invalid tickets.")
 
         
-    with stylable_container(key="styled_plot_container_1", css_styles=css_styles):
+    with stylable_container(key="daily ticket", css_styles=css_styles):
         st.markdown("**:material/sports_martial_arts: Daily Ticket Activity**", 
                     help="This chart shows the daily number of tickets opened/reopened/ versus tickets solved and invalidated.")
 
@@ -1055,7 +1055,7 @@ with col1:
         else:
             st.warning("Please filter the data first to see the daily activity.")
 
-    with stylable_container(key="styled_plot_container_1", css_styles=css_styles):
+    with stylable_container(key="cummulative ticket", css_styles=css_styles):
         st.markdown("**:material/sports_martial_arts: Cumulative Opened Ticket vs Closed Ticket**", 
                     help="This chart shows the cumulative count of unique tickets opened (including reopened) versus unique tickets finally closed (including Invalidated).")
 
@@ -1175,7 +1175,7 @@ with col2:
     """
     
     # Gunakan styleable_container untuk membungkus plot
-    with stylable_container(key="styled_plot_container_3", css_styles=css_styles):
+    with stylable_container(key="overview", css_styles=css_styles):
         st.markdown(':material/confirmation_number: **Ticket Status Overview (Open, Closed, Invalid)**', 
                     help='Shows the composition of open, closed, and invalid tickets for each feature. X-axis: feature names, Y-axis: ticket count.')
 
