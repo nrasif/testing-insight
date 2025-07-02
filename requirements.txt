@@ -7,5 +7,4 @@ protobuf==4.25.3
 streamlit==1.45.1
 streamlit==1.46.0
 streamlit_antd_components==0.3.2
-streamlit_extras==0.7.5
-streamlit_keyup==0.3.0
+streamlit-extras==0.7.5
