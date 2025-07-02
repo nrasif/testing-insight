@@ -1,0 +1,11 @@
+altair==4.2.2
+google_api_python_client==2.153.0
+numpy==2.3.1
+pandas==2.3.0
+plotly==5.24.1
+protobuf==4.25.3
+streamlit==1.45.1
+streamlit==1.46.0
+streamlit_antd_components==0.3.2
+streamlit_extras==0.7.5
+streamlit_keyup==0.3.0
