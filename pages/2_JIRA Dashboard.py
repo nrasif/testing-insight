@@ -220,6 +220,163 @@ def format_hours_to_days_hours(total_hours):
         parts.append(f"{remaining_hours} jam")
     return " ".join(parts) if parts else f"{days} hari"
 
+def create_feature_squad_status_bubble_chart(df: pd.DataFrame):
+    """
+    Membuat bubble chart kategorikal untuk menunjukkan distribusi tiket
+    berdasarkan Fitur, Status, dan Squad.
+
+    - Sumbu Y: Fitur
+    - Sumbu X: Status Tiket
+    - Warna: Squad
+    - Ukuran Bubble: Jumlah Tiket
+
+    Args:
+        df (pd.DataFrame): DataFrame yang sudah difilter.
+
+    Returns:
+        go.Figure or None: Objek gambar Plotly atau None jika tidak ada data.
+    """
+    if df.empty:
+        return None
+
+    # Pastikan kolom yang dibutuhkan tidak kosong
+    required_cols = ['Feature', 'Squad', 'Status']
+    df_chart = df.dropna(subset=required_cols).copy()
+
+    if df_chart.empty:
+        return None
+
+    # 1. Agregasi data: Hitung jumlah tiket untuk setiap kombinasi
+    bubble_data = df_chart.groupby(['Feature', 'Squad', 'Status']).size().reset_index(name='Jumlah Tiket')
+    
+    # Tambahkan nama fitur yang dipotong untuk label sumbu Y
+    bubble_data['Feature_Display'] = bubble_data['Feature'].apply(lambda name: truncate_feature_name(name, max_words=3))
+
+
+    # 2. Buat bubble chart menggunakan Plotly Express
+    fig = px.scatter(
+        bubble_data,
+        x='Status',
+        y='Feature_Display',
+        size='Jumlah Tiket',
+        color='Squad',
+        size_max=30,  # Ukuran bubble maksimum agar tidak terlalu besar
+        labels={
+            "Status": "Status Tiket",
+            "Feature_Display": "Fitur",
+            "Jumlah Tiket": "Jumlah Tiket",
+            "Squad": "Squad"
+        },
+        custom_data=['Feature', 'Squad', 'Jumlah Tiket'] # Data tambahan untuk hover
+    )
+
+    # 3. Kustomisasi tampilan (layout & hover)
+    fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(showgrid=True, gridcolor='rgba(220, 220, 220, 0.5)'),
+        yaxis=dict(showgrid=True, gridcolor='rgba(220, 220, 220, 0.5)'),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        margin=dict(l=20, r=20, t=50, b=20),
+        height=1000 # Beri tinggi yang cukup untuk bubble chart
+    )
+    
+    # Kustomisasi tooltip
+    fig.update_traces(
+        hovertemplate="<b>Fitur: %{customdata[0]}</b><br><br>" +
+                      "Status: %{x}<br>" +
+                      "Squad: %{customdata[1]}<br>" +
+                      "Jumlah Tiket: %{customdata[2]}<extra></extra>"
+    )
+
+    return fig
+
+def create_feature_squad_status_bubble_chart(df: pd.DataFrame):
+    """
+    Membuat bubble chart kategorikal untuk menunjukkan distribusi tiket
+    berdasarkan Fitur, Status, dan Squad, dengan total per status dan fitur.
+    """
+    if df.empty:
+        return None
+
+    # Salin DataFrame untuk menghindari SettingWithCopyWarning
+    df_chart = df.copy()
+
+    # --- PERUBAHAN DIMULAI DI SINI ---
+    # Ganti nilai None/NaN di kolom 'Squad' menjadi 'Unclassified'
+    df_chart['Squad'] = df_chart['Squad'].fillna('Unclassified')
+    # Drop baris hanya jika 'Feature' atau 'Status' yang kosong
+    df_chart.dropna(subset=['Feature', 'Status'], inplace=True)
+    # --- PERUBAHAN SELESAI DI SINI ---
+
+    if df_chart.empty:
+        return None
+
+    bubble_data = df_chart.groupby(['Feature', 'Squad', 'Status']).size().reset_index(name='Total Tickets')
+    bubble_data['Feature_Display'] = bubble_data['Feature'].apply(lambda name: truncate_feature_name(name, max_words=3))
+
+    fig = px.scatter(
+        bubble_data,
+        x='Status',
+        y='Feature_Display',
+        size='Total Tickets',
+        color='Squad',
+        size_max=50,
+        labels={"Status": "Ticket Status", "Feature_Display": "Features", "Total Tickets": "Total Tickets", "Squad": "Squad"},
+        custom_data=['Feature', 'Squad', 'Total Tickets']
+    )
+
+    # --- HITUNG DAN TAMBAHKAN TOTAL UNTUK SETIAP STATUS (ATAS) ---
+    status_totals = bubble_data.groupby('Status')['Total Tickets'].sum().reset_index()
+    for index, row in status_totals.iterrows():
+        fig.add_annotation(
+            x=row['Status'],
+            y=1.05,
+            yref="paper",
+            text=f"<br> <br> <br><b>{row['Total Tickets']}</b>",
+            showarrow=False,
+            font=dict(color="#333333", size=14),
+            align="center"
+        )
+
+    # --- HITUNG DAN TAMBAHKAN TOTAL UNTUK SETIAP FITUR (KANAN) ---
+    feature_totals = bubble_data.groupby('Feature_Display')['Total Tickets'].sum().reset_index()
+    for index, row in feature_totals.iterrows():
+        fig.add_annotation(
+            x=1.02, # Posisikan sedikit di kanan area plot
+            xref="paper",
+            y=row['Feature_Display'],
+            text=f"<b>{row['Total Tickets']}</b>",
+            showarrow=False,
+            xanchor='left',
+            font=dict(color="#333333", size=12)
+        )
+
+    fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(showgrid=True, gridcolor='rgba(220, 220, 220, 0.5)'),
+        yaxis=dict(showgrid=True, gridcolor='rgba(220, 220, 220, 0.5)', categoryorder='total ascending'),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=20, r=60, t=70, b=20), # Beri ruang lebih di atas (t) dan kanan (r)
+        height=940
+    )
+    
+    fig.update_traces(
+        hovertemplate="<b>Feature: %{customdata[0]}</b><br><br>" +
+                      "Status: %{x}<br>" +
+                      "Squad: %{customdata[1]}<br>" +
+                      "Total Tickets: %{customdata[2]}<extra></extra>"
+    )
+    return fig
+
+
 with open('css/style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html = True)
 
@@ -393,7 +550,7 @@ with st.expander(':material/tune: Filter', expanded=False):
             type="secondary" # Membuat tombol terlihat 'secondary' (biasanya abu-abu)
         )
     
-    options_data = ['PTR 1.1.0', 'SITBAU 1.1.0 GS 9.10.1', 'PTR 1.1.0 GS 9.10.1', 'SITBAU Always On 1.1.0', 'PTR Always On 1.1.0']
+    options_data = ['PTR 1.1.0', 'SITBAU 1.1.0 GS 9.10.1', 'PTR 1.1.0 GS 9.10.1', 'SITBAU Always On 1.1.0', 'PTR Always On 1.1.0', 'Release 1.1.1 SITBAU']
     st.pills("Quick filter by project:", options_data, selection_mode="single", key="pills_selection")
 
 df_filtered = apply_filters(
@@ -472,7 +629,7 @@ display_summary_metrics(
 )
 
 
-col1, col2 = st.columns([1.5,2.5])
+col1, col2 = st.columns([1.6,2.4])
 
 with col1:
 
@@ -549,143 +706,201 @@ with col1:
     else:
         st.warning(f"No tickets found with features matching the filter")
 
-    with stylable_container(key="plot_container", css_styles=css_styles):
-        st.markdown(':material/database: **Detailed Data**', 
-            help='Shows detailed tickets and other parameters')
 
-        styled_df = df_filtered[
-            [
-                "Tickets",
-                "Feature",
-                "Title",
-                "Severity",
-                "Status",
-                "Reporter",
-                "Assignee",
-                "Created",
-                "Resolved_Time",
-                "Labels",
-                "Device",
-                "Stage",
-                "Fix_Versions",
-                "Squad",
-                "Bug Type",
-            ]
-        ].style.map(color_status, subset=['Status']).map(color_severity, subset=['Severity']) # <-- Cukup tambahkan ini
-
-        # Tampilkan DataFrame yang sudah di-style
-        st.dataframe(styled_df, use_container_width=True)
-
-
-with col2:
-
-    css_styles = """
+# --- 1. Definisikan CSS dengan tinggi tetap dan font lebih kecil ---
+    css_final_layout = """
     {
         border: 2px solid #e6e6e6;
-        border-radius: 10px;
+        border-radius: 16px;
         padding: 20px;
-        background-color: #F6f6f6;
-        height: 500px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        height: 500px; 
+        overflow-y: auto;
+        background-color: #F6F6F6;
+        scrollbar-width: none; 
+        -ms-overflow-style: none;
     }
+    &::-webkit-scrollbar {
+        display: none;
+    }
+        
+        .ticket-card {
+            background-color: transparent; 
+            box-shadow: none;
+            border: none;
+            border-bottom: 1px solid #e9ecef;
+            height: 150px;         
+            border-left: 2px solid #454444;
+            padding: 10px 10px 10px 20px; 
+            margin-bottom: 20px;
+        }
+        
+        .ticket-card:hover {
+            background-color: #f0f0f0; /* Ganti dengan highlight background subtil saat di-hover */
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0px;
+        }
+        
+        .ticket-id {
+            font-weight: 700;
+            font-size: 0.9em; 
+            color: #212529;
+        }
+        
+        .status-badge {
+            font-size: 0.6em; 
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 12px;
+        }
+        
+        .ticket-severity {
+            font-size: 0.6em; 
+        }
+        .ticket-info-list {
+            margin-top: 2px;
+            font-size: 0.8em !important; 
+            color: #495057;
+            padding-left: 0;
+        }
+        
+        .column-header {
+            font-size: 1em;
+            font-weight: 700;
+            color: #343a40;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 20px;
+            margin-left: 5px;
+        }
+        .ticket-count-badge {
+            font-size: 0.85em;
+            font-weight: 500;
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 2px 9px;
+            border-radius: 8px;
+        }
+        
+        .status-open { background-color: #ffebee; color: #c62828;}
+        .status-resolved { background-color: #e8f5e9; color: #2e7d32; }
+        .status-invalid { background-color: #f5f5f5; color: #616161; }
+        .severity-highest { color: #d32f2f; font-weight: 600; font-size: 0.8em;}
+        .severity-medium { color: #f57c00; font-weight: 600; font-size: 0.8em; }
+        .severity-low { color: #0277bd; font-weight: 600; font-size: 0.8em; }
     """
-    
-    # Gunakan styleable_container untuk membungkus plot
-    with stylable_container(key="styled_plot_container", css_styles=css_styles):
-        st.markdown(':material/confirmation_number: **Ticket Status Overview (Open, Closed, Invalid)**', 
-                    help='Shows the composition of open, closed, and invalid tickets for each feature. X-axis: feature names, Y-axis: ticket count.')
 
-        if not df_filtered.empty:
-            df_plot2 = df_filtered.copy()
+    # --- 2. Gunakan SATU stylable_container untuk membungkus semuanya ---
+    with stylable_container(key="final_dashboard_container", css_styles=css_final_layout):
+
+        st.markdown(':material/view_quilt: **Ticket Details Dashboard**', 
+                    help='Click on a feature to see a detailed card-view of tickets, categorized by status.')
+
+        if 'df_filtered' in locals() and not df_filtered.empty:
             
-            # Persiapan Data (Sama seperti sebelumnya)
-            solved_states = ['Done', 'RESOLVE', 'Resolve', 'Done.', 'DONE']
-            invalid_states = ['Invalid']
+            # --- KUNCI 2: Logika Status yang Lebih Tegas ---
+            resolved_statuses = ['Done', 'RESOLVE', 'Resolve', 'Done.', 'DONE', 'Closed']
+            invalid_statuses = ['Invalid']
 
-            def categorize_ticket_state(status):
-                if status in solved_states: return 'Closed'
-                elif status in invalid_states: return 'Invalid'
-                else: return 'Open'
+            # Buat filter boolean untuk setiap kategori
+            is_resolved = df_filtered['Status'].isin(resolved_statuses)
+            is_invalid = df_filtered['Status'].isin(invalid_statuses)
+            # Tiket 'Open' adalah semua tiket yang BUKAN resolved DAN BUKAN invalid
+            is_open = ~is_resolved & ~is_invalid
+
+            # Mapping untuk kelas CSS
+            severity_color_map = {'Highest': 'severity-highest', 'Medium': 'severity-medium', 'Low': 'severity-low'}
             
-            df_plot2['Ticket_State'] = df_plot2['Status'].apply(categorize_ticket_state)
-            
-            feature_order = df_plot2['Feature'].value_counts().index
-            
-            chart_data2 = df_plot2.groupby(['Feature', 'Ticket_State']).size().reset_index(name='Jumlah Tiket')
-            pivot_df = chart_data2.pivot(index='Feature', columns='Ticket_State', values='Jumlah Tiket').fillna(0)
-            pivot_df = pivot_df.reindex(feature_order)
-            
-            
-            truncated_labels = pivot_df.index.map(lambda name: truncate_feature_name(name, max_words=2))
-            
+            features_sorted = df_filtered['Feature'].value_counts().index.tolist()
 
-            fig2 = go.Figure()
+            if not features_sorted:
+                st.info("No tickets with features found for the selected filters.")
+            else:
+                for feature in features_sorted:
+                    feature_df = df_filtered[df_filtered['Feature'] == feature]
+                    
+                    open_tickets_count = feature_df[is_open].shape[0]
+                    total_tickets_count = feature_df.shape[0]
 
-            status_order = ['Closed', 'Invalid', 'Open']
-            colors = {'Open': '#2C497F', 'Closed': '#24b24c', 'Invalid': "#9C9C9C"}
+                    expander_title = f"**{feature}** — ({open_tickets_count} Open / {total_tickets_count} Total)"
+                    
+                    # Ganti blok 3 kolom Anda dengan ini
+                    with st.expander(expander_title):
+                        
+                        # Buat 3 Kolom
+                        col_open, col_resolved, col_invalid = st.columns(3)
 
-            for i, status in enumerate(status_order):
-                if status not in pivot_df.columns:
-                    continue
+                        # --- Fungsi Bantuan untuk Render Kartu (tetap sama) ---
+                        def render_ticket_card(row, status_category):
+                            # ... (isi fungsi render_ticket_card tidak perlu diubah) ...
+                            severity = row.get('Severity', 'N/A')
+                            status_class = f"status-{status_category}"
+                            severity_class = severity_color_map.get(severity, "")
+                            
+                            st.markdown(f"""
+                                <div class="ticket-card">
+                                    <div class="card-header">
+                                        <span class="ticket-id">{row['Tickets']}</span>
+                                        <span class="status-badge {status_class}">{row['Status']}</span>
+                                    </div>
+                                    <div>
+                                        <span class="{severity_class}">{severity}</span>
+                                        <div class="ticket-info-list">
+                                            <b>Squad:</b> {row.get('Squad', 'N/A')} <br>
+                                            <b>Bug Type:</b> {row.get('Bug Type', 'N/A')}
+                                        </div>
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
 
-                is_top_layer = (i == len(status_order) - 1)
-                radius = 10 if is_top_layer else 0
+                        # --- Kolom 1: OPEN ---
+                        with col_open:
+                            open_tickets_df = feature_df[is_open]
+                            # Hitung jumlah tiket di kolom ini
+                            count = len(open_tickets_df.index)
+                            # Tampilkan header kustom
+                            st.markdown(f"<div class='column-header'> Open <span class='ticket-count-badge'>{count}</span></div>", unsafe_allow_html=True)
+                            
+                            if not open_tickets_df.empty:
+                                for _, row in open_tickets_df.iterrows():
+                                    render_ticket_card(row, "open")
+                            else: 
+                                st.caption("No open tickets.")
+                        
+                        # --- Kolom 2: RESOLVED ---
+                        with col_resolved:
+                            resolved_tickets_df = feature_df[is_resolved]
+                            # Hitung jumlah tiket di kolom ini
+                            count = len(resolved_tickets_df.index)
+                            # Tampilkan header kustom
+                            st.markdown(f"<div class='column-header'> Resolved <span class='ticket-count-badge'>{count}</span></div>", unsafe_allow_html=True)
+                            
+                            if not resolved_tickets_df.empty:
+                                for _, row in resolved_tickets_df.iterrows():
+                                    render_ticket_card(row, "resolved")
+                            else: 
+                                st.caption("No resolved tickets.")
+                        
+                        # --- Kolom 3: INVALID ---
+                        with col_invalid:
+                            invalid_tickets_df = feature_df[is_invalid]
+                            # Hitung jumlah tiket di kolom ini
+                            count = len(invalid_tickets_df.index)
+                            # Tampilkan header kustom
+                            st.markdown(f"<div class='column-header'> Invalid <span class='ticket-count-badge'>{count}</span></div>", unsafe_allow_html=True)
+                            
+                            if not invalid_tickets_df.empty:
+                                for _, row in invalid_tickets_df.iterrows():
+                                    render_ticket_card(row, "invalid")
+                            else: 
+                                st.caption("No invalid tickets.")
 
-                fig2.add_trace(go.Bar(
-                    name=status,
-                    x=truncated_labels, # <- label yang udah dipotong
-                    y=pivot_df[status],
-                    hovertext=pivot_df.index, # <- Simpan nama lengkap untuk hover
-                    marker=dict(
-                        color=colors[status],
-                        cornerradius=radius,
-                        # line=dict(width=2, color='rgba(246, 246, 246, 1)')
-                    ),
-                    text=pivot_df[status].apply(lambda x: int(x) if x > 0 else ''),
-                    textposition='inside',
-                    textfont=dict(color='white'),
-                    # Kustomisasi hover untuk menampilkan nama lengkap
-                    hovertemplate='<b>%{hovertext}</b><br>' + f'{status}: %{{y}}<extra></extra>'
-                ))
-
-            # Poles Tampilan (Aesthetic)
-            fig2.update_layout(
-                barmode='stack',
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(
-                    showgrid=False,
-                    tickfont=dict(size=12, family='sans-serif'),
-                    categoryorder='array',
-                    categoryarray=truncated_labels # <-- Gunakan label terpotong untuk pengurutan
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    visible=True
-                ),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1,
-                    title_text="",
-                    font=dict(family="sans-serif", size=12)
-                ),
-                height=400,
-                margin=dict(l=10, r=10, t=80, b=0),
-                hoverlabel=dict(
-                    bgcolor="white",
-                    font_size=14,
-                    font_family="sans-serif"
-                )
-            )
-            
-            st.plotly_chart(fig2, use_container_width=True)
-
-        else:
-            st.info("Tidak ada data tiket untuk divisualisasikan dengan filter yang dipilih.")
-    
+        
     with stylable_container(key="styled_plot_container", css_styles=css_styles):
         st.markdown("**:material/sports_martial_arts: Daily Ticket Activity**", 
                     help="This chart shows the daily number of tickets opened/reopened/ versus tickets solved and invalidated.")
@@ -831,7 +1046,7 @@ with col2:
                         orientation="h", yanchor="bottom", y=1.02,
                         xanchor="right", x=1
                     ),
-                    margin=dict(l=20, r=20, t=80, b=0),
+                    margin=dict(l=20, r=20, t=70, b=0),
                     height=400,
                 )
                 st.plotly_chart(fig_activity, use_container_width=True)
@@ -839,3 +1054,243 @@ with col2:
                 st.info("No valid ticket history data found in the filtered dataset to generate an activity plot.")
         else:
             st.warning("Please filter the data first to see the daily activity.")
+
+    with stylable_container(key="styled_plot_container", css_styles=css_styles):
+        st.markdown("**:material/sports_martial_arts: Cumulative Opened Ticket vs Closed Ticket**", 
+                    help="This chart shows the cumulative count of unique tickets opened (including reopened) versus unique tickets finally closed (including Invalidated).")
+
+
+        # --- FUNGSI BARU DENGAN LOGIKA PER TIKET (YANG BENAR) ---
+        @st.cache_data
+        def prepare_ticket_lifecycle_data(df):
+            """
+            Menganalisis riwayat setiap tiket untuk menemukan tanggal pembukaan pertamanya
+            dan tanggal penutupan terakhirnya, lalu menghitung jumlah kumulatif.
+            """
+            opened_dates = []
+            closed_dates = []
+
+            solved_states = ['Done', 'RESOLVE', 'Resolve', 'Done.', 'DONE', 'Closed']
+            invalid_states = ['Invalid']
+            final_closed_states = solved_states + invalid_states
+
+            for index, row in df.iterrows():
+                history_json_str = row.get('Status_History_JSON')
+                if not history_json_str or not isinstance(history_json_str, str):
+                    continue
+                
+                try:
+                    history_data = json.loads(history_json_str)
+                    if not isinstance(history_data, list) or not history_data:
+                        continue
+
+                    # PENTING: Urutkan riwayat berdasarkan timestamp untuk menemukan event pertama dan terakhir
+                    history_data.sort(key=lambda x: pd.to_datetime(x.get('timestamp')))
+
+                    # 1. Tentukan tanggal tiket DIBUAT (hanya event pertama)
+                    first_event = history_data[0]
+                    if first_event.get('status_from') is None:
+                        opened_dates.append(pd.to_datetime(first_event['timestamp']).date())
+                    
+                    # 2. Tentukan tanggal tiket FINAL DITUTUP (hanya event terakhir)
+                    last_event = history_data[-1]
+                    if last_event.get('status_to') in final_closed_states:
+                        closed_dates.append(pd.to_datetime(last_event['timestamp']).date())
+
+                except (json.JSONDecodeError, TypeError, KeyError):
+                    continue
+
+            if not opened_dates:
+                return pd.DataFrame()
+
+            # Hitung jumlah tiket unik yang dibuka/ditutup per hari
+            opened_daily = pd.Series(opened_dates).value_counts()
+            closed_daily = pd.Series(closed_dates).value_counts()
+
+            # Gabungkan menjadi satu DataFrame harian
+            daily_df = pd.DataFrame({'open': opened_daily, 'closed': closed_daily}).fillna(0)
+            
+            # Reindex untuk memastikan semua hari ada, lalu hitung kumulatif
+            full_date_range = pd.date_range(start=daily_df.index.min(), end=daily_df.index.max(), freq='D')
+            daily_df = daily_df.reindex(full_date_range, fill_value=0)
+            
+            cumulative_df = daily_df.cumsum()
+            cumulative_df.rename(columns={'open': 'opened_cumulative', 'closed': 'closed_cumulative'}, inplace=True)
+            
+            return cumulative_df
+
+        # Jalankan proses dengan fungsi baru
+        if 'df_filtered' in locals() and not df_filtered.empty:
+            with st.spinner('Analyzing ticket lifecycle...'):
+                lifecycle_df = prepare_ticket_lifecycle_data(df_filtered)
+
+            if not lifecycle_df.empty:
+                # Bagian plotting ini sama, hanya sumber datanya yang berbeda
+                fig_lifecycle = go.Figure()
+                
+                colors = {"opened": "#E24F4F", "closed": '#24b24c'}
+
+                fig_lifecycle.add_trace(go.Scatter(
+                    x=lifecycle_df.index, y=lifecycle_df['opened_cumulative'],
+                    name='Opened (Cumulative)', mode='lines',
+                    line=dict(width=3.5, color=colors['opened'], shape='spline'),
+                    fill='tozeroy', fillcolor='rgba(226, 79, 79, 0.1)',
+                    hovertemplate='<b>Total Opened: %{y}</b><br>Date: %{x|%d %b %Y}<extra></extra>'
+                ))
+
+                fig_lifecycle.add_trace(go.Scatter(
+                    x=lifecycle_df.index, y=lifecycle_df['closed_cumulative'],
+                    name='Closed (Cumulative)', mode='lines',
+                    line=dict(width=3.5, color=colors['closed'], shape='spline'),
+                    fill='tozeroy', fillcolor='rgba(36, 178, 76, 0.2)',
+                    hovertemplate='<b>Total Closed: %{y}</b><br>Date: %{x|%d %b %Y}<extra></extra>'
+                ))
+                
+                fig_lifecycle.update_layout(
+                    template='plotly_white', hovermode='x unified',
+                    xaxis=dict(rangeslider=dict(visible=True, thickness=0.08), showgrid=True, gridcolor='rgba(220, 220, 220, 0.5)'),
+                    yaxis=dict(title='Cumulative Unique Tickets', side='right', showgrid=True, gridcolor='rgba(220, 220, 220, 0.5)'),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    margin=dict(l=20, r=20, t=70, b=0), height=400,
+                )
+                st.plotly_chart(fig_lifecycle, use_container_width=True)
+            else:
+                st.info("No valid ticket history data found for lifecycle analysis.")
+        else:
+            st.warning("Please filter the data first to see the ticket lifecycle.")
+
+
+
+with col2:
+
+    css_styles = """
+    {
+        border: 2px solid #e6e6e6;
+        border-radius: 10px;
+        padding: 20px;
+        background-color: #F6f6f6;
+        height: 500px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    }
+    """
+    
+    # Gunakan styleable_container untuk membungkus plot
+    with stylable_container(key="styled_plot_container", css_styles=css_styles):
+        st.markdown(':material/confirmation_number: **Ticket Status Overview (Open, Closed, Invalid)**', 
+                    help='Shows the composition of open, closed, and invalid tickets for each feature. X-axis: feature names, Y-axis: ticket count.')
+
+        if not df_filtered.empty:
+            df_plot2 = df_filtered.copy()
+            
+            # Persiapan Data (Sama seperti sebelumnya)
+            solved_states = ['Done', 'RESOLVE', 'Resolve', 'Done.', 'DONE']
+            invalid_states = ['Invalid']
+
+            def categorize_ticket_state(status):
+                if status in solved_states: return 'Closed'
+                elif status in invalid_states: return 'Invalid'
+                else: return 'Open'
+            
+            df_plot2['Ticket_State'] = df_plot2['Status'].apply(categorize_ticket_state)
+            
+            feature_order = df_plot2['Feature'].value_counts().index
+            
+            chart_data2 = df_plot2.groupby(['Feature', 'Ticket_State']).size().reset_index(name='Jumlah Tiket')
+            pivot_df = chart_data2.pivot(index='Feature', columns='Ticket_State', values='Jumlah Tiket').fillna(0)
+            pivot_df = pivot_df.reindex(feature_order)
+            
+            
+            truncated_labels = pivot_df.index.map(lambda name: truncate_feature_name(name, max_words=2))
+            
+
+            fig2 = go.Figure()
+
+            status_order = ['Closed', 'Invalid', 'Open']
+            colors = {'Open': '#2C497F', 'Closed': '#24b24c', 'Invalid': "#9C9C9C"}
+
+            for i, status in enumerate(status_order):
+                if status not in pivot_df.columns:
+                    continue
+
+                is_top_layer = (i == len(status_order) - 1)
+                radius = 10 if is_top_layer else 0
+
+                fig2.add_trace(go.Bar(
+                    name=status,
+                    x=truncated_labels, # <- label yang udah dipotong
+                    y=pivot_df[status],
+                    hovertext=pivot_df.index, # <- Simpan nama lengkap untuk hover
+                    marker=dict(
+                        color=colors[status],
+                        cornerradius=radius,
+                        # line=dict(width=2, color='rgba(246, 246, 246, 1)')
+                    ),
+                    text=pivot_df[status].apply(lambda x: int(x) if x > 0 else ''),
+                    textposition='inside',
+                    textfont=dict(color='white'),
+                    # Kustomisasi hover untuk menampilkan nama lengkap
+                    hovertemplate='<b>%{hovertext}</b><br>' + f'{status}: %{{y}}<extra></extra>'
+                ))
+
+            # Poles Tampilan (Aesthetic)
+            fig2.update_layout(
+                barmode='stack',
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(
+                    showgrid=False,
+                    tickfont=dict(size=12, family='sans-serif'),
+                    categoryorder='array',
+                    categoryarray=truncated_labels # <-- Gunakan label terpotong untuk pengurutan
+                ),
+                yaxis=dict(
+                    showgrid=True,
+                    visible=True
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    title_text="",
+                    font=dict(family="sans-serif", size=12)
+                ),
+                height=400,
+                margin=dict(l=10, r=10, t=80, b=0),
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=14,
+                    font_family="sans-serif"
+                )
+            )
+            
+            st.plotly_chart(fig2, use_container_width=True)
+
+        else:
+            st.info("No ticket data found for the selected filters. Please adjust the filters and try again")            
+
+    # Gunakan style container yang sama dengan chart lainnya untuk konsistensi
+    css_styles_full_width = """
+        {
+            border: 2px solid #e6e6e6;
+            border-radius: 10px;
+            padding: 20px;
+            background-color: #F6f6f6;
+            height: 1015px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+    """
+
+    with stylable_container(key="bubble_chart_container", css_styles=css_styles_full_width):
+        st.markdown(':material/bubble_chart: **Ticket Distribution by Feature, Status, and Squad**',
+                    help='This is a visualization of ticket density. The Y-axis represents features, the X-axis shows ticket statuses, color indicates the squad, and the bubble size reflects the number of ticket')
+
+        # Panggil fungsi yang baru dibuat dengan data yang sudah difilter
+        bubble_chart_fig = create_feature_squad_status_bubble_chart(df_filtered)
+
+        # Tampilkan chart jika berhasil dibuat, atau tampilkan pesan jika tidak ada data
+        if bubble_chart_fig:
+            st.plotly_chart(bubble_chart_fig, use_container_width=True)
+        else:
+            st.info("There is not enough data to display the bubble chart based on the selected filters. Please ensure that the tickets contain 'Feature', 'Squad', and 'Status' information.")

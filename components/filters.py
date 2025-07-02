@@ -64,6 +64,12 @@ def apply_filters(df_original: pd.DataFrame,
                 (df_filtered['Title'].str.contains('Always On', na=False)) & 
                 (df_filtered['Stage'] == 'PTR')
             ]
+        
+        elif pills_selection == "Release 1.1.1 SITBAU":
+            df_filtered = df_filtered[
+                (df_filtered['Title'].str.contains('Release 1.1.1', na=False)) & 
+                (df_filtered['Stage'] == 'Regression')
+            ]
 
     # Filter berdasarkan Ticket ID Search
     if ticket_id_search and 'Tickets' in df_filtered.columns:
