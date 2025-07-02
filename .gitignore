@@ -172,3 +172,4 @@ cython_debug/
 notebook/
 secrets_api/
 data/
+.streamlit/secrets.toml
