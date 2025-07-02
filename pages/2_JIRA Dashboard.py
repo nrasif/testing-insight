@@ -824,7 +824,7 @@ with col1:
                 for feature in features_sorted:
                     feature_df = df_filtered[df_filtered['Feature'] == feature]
                     
-                    open_tickets_count = feature_df[is_open].shape[0]
+                    open_tickets_count = df_filtered[is_open & (df_filtered['Feature'] == feature)].shape[0]
                     total_tickets_count = feature_df.shape[0]
 
                     expander_title = f"**{feature}** — ({open_tickets_count} Open / {total_tickets_count} Total)"
@@ -860,10 +860,10 @@ with col1:
 
                         # --- Kolom 1: OPEN ---
                         with col_open:
-                            open_tickets_df = feature_df[is_open]
-                            # Hitung jumlah tiket di kolom ini
+                            # Gabungkan filter fitur dan filter status dalam satu baris
+                            open_tickets_df = df_filtered[is_open & (df_filtered['Feature'] == feature)]
+                            
                             count = len(open_tickets_df.index)
-                            # Tampilkan header kustom
                             st.markdown(f"<div class='column-header'> Open <span class='ticket-count-badge'>{count}</span></div>", unsafe_allow_html=True)
                             
                             if not open_tickets_df.empty:
@@ -874,7 +874,7 @@ with col1:
                         
                         # --- Kolom 2: RESOLVED ---
                         with col_resolved:
-                            resolved_tickets_df = feature_df[is_resolved]
+                            resolved_tickets_df = df_filtered[is_resolved & (df_filtered['Feature'] == feature)]
                             # Hitung jumlah tiket di kolom ini
                             count = len(resolved_tickets_df.index)
                             # Tampilkan header kustom
@@ -888,7 +888,7 @@ with col1:
                         
                         # --- Kolom 3: INVALID ---
                         with col_invalid:
-                            invalid_tickets_df = feature_df[is_invalid]
+                            invalid_tickets_df = df_filtered[is_invalid & (df_filtered['Feature'] == feature)]
                             # Hitung jumlah tiket di kolom ini
                             count = len(invalid_tickets_df.index)
                             # Tampilkan header kustom
@@ -901,7 +901,7 @@ with col1:
                                 st.caption("No invalid tickets.")
 
         
-    with stylable_container(key="styled_plot_container", css_styles=css_styles):
+    with stylable_container(key="styled_plot_container_1", css_styles=css_styles):
         st.markdown("**:material/sports_martial_arts: Daily Ticket Activity**", 
                     help="This chart shows the daily number of tickets opened/reopened/ versus tickets solved and invalidated.")
 
@@ -1055,7 +1055,7 @@ with col1:
         else:
             st.warning("Please filter the data first to see the daily activity.")
 
-    with stylable_container(key="styled_plot_container", css_styles=css_styles):
+    with stylable_container(key="styled_plot_container_1", css_styles=css_styles):
         st.markdown("**:material/sports_martial_arts: Cumulative Opened Ticket vs Closed Ticket**", 
                     help="This chart shows the cumulative count of unique tickets opened (including reopened) versus unique tickets finally closed (including Invalidated).")
 
@@ -1175,7 +1175,7 @@ with col2:
     """
     
     # Gunakan styleable_container untuk membungkus plot
-    with stylable_container(key="styled_plot_container", css_styles=css_styles):
+    with stylable_container(key="styled_plot_container_3", css_styles=css_styles):
         st.markdown(':material/confirmation_number: **Ticket Status Overview (Open, Closed, Invalid)**', 
                     help='Shows the composition of open, closed, and invalid tickets for each feature. X-axis: feature names, Y-axis: ticket count.')
 
