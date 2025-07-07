@@ -1,79 +1,40 @@
+# components/metrics.py
 import streamlit as st
-from streamlit_extras.stylable_container import stylable_container
+import pandas as pd
+from utils.helpers import duration_to_hours, format_hours_to_days_hours
+from config import STATUS_CATEGORIES
 
-def display_summary_metrics(
-    total_tickets,
-    total_open_tickets, 
-    total_solved_tickets, 
-    total_invalid_ticket, 
-    formatted_avg_duration,
-    metric_card_style
-):
-    """
-    Menampilkan 4 metrik utama dalam kolom dengan style kustom.
-
-    Args:
-        total_open_tickets (int): Jumlah tiket yang masih open.
-        total_solved_tickets (int): Jumlah tiket yang sudah solved.
-        total_invalid_ticket (int): Jumlah tiket yang invalid.
-        formatted_avg_duration (str): Rata-rata waktu penyelesaian yang sudah diformat.
-        metric_card_style (str): String CSS untuk styling container metrik.
-    """
+def display_summary_metrics(df: pd.DataFrame, metric_card_style: str):
+    """Calculates and displays the main summary metrics in styled cards."""
     
-    # Membuat 4 kolom untuk menampung metrik
-    col1, col2, col3, col4, col5 = st.columns(5)
+    st.markdown(f"<style>{metric_card_style}</style>", unsafe_allow_html=True)
     
-    with col1:
-        with stylable_container(
-            key="total_tickets_metric",
-            css_styles=metric_card_style
-        ):
-            st.metric(
-                label="Total Tickets",
-                value=f"{total_tickets}",
-                help='All tickets including open, closed, and invalid tickets'
-            )
+    if df.empty:
+        st.info("No data available for the selected filters to display metrics.")
+        return
 
-    with col2:
-        with stylable_container(
-            key="open_tickets_metric",
-            css_styles=metric_card_style  # Menggunakan style yang di-passing
-        ):
-            st.metric(
-                label="Total Open Tickets", 
-                value=f"{total_open_tickets}", 
-                help='Ticket that is not solved with status include everything except "Resolve" and "Invalid"'
-            )
+    total_tickets = len(df.index)
+    
+    is_invalid = df['Status'].isin(STATUS_CATEGORIES['invalid'])
+    is_resolved = df['Status'].isin(STATUS_CATEGORIES['resolved'])
+    
+    total_open_tickets = len(df[~is_invalid & ~is_resolved])
+    total_solved_tickets = df[is_resolved].shape[0]
+    total_invalid_ticket = df[is_invalid].shape[0]
 
-    with col3:
-        with stylable_container(
-            key="solved_tickets_metric",
-            css_styles=metric_card_style  # Menggunakan style yang sama
-        ):
-            st.metric(
-                label="Solved Tickets", 
-                value=f"{total_solved_tickets}", 
-                help='Ticket that is solved'
-            )
-            
-    with col4:
-        with stylable_container(
-            key="invalid_tickets_metric",
-            css_styles=metric_card_style  # Menggunakan style yang sama
-        ):
-            st.metric(
-                label="Invalid Ticket", 
-                value=f"{total_invalid_ticket}", 
-                help='Ticket that is Invalid'
-            )
+    # Calculate average resolution time
+    solved_tickets_df = df[df['Resolved_Time'].notna()].copy()
+    if not solved_tickets_df.empty and 'Duration_toResolve' in solved_tickets_df.columns:
+        solved_tickets_df['duration_hours'] = solved_tickets_df['Duration_toResolve'].apply(duration_to_hours)
+        avg_duration_in_hours = solved_tickets_df['duration_hours'].mean()
+        formatted_avg_duration = format_hours_to_days_hours(avg_duration_in_hours)
+    else:
+        formatted_avg_duration = "N/A"
 
-    with col5:
-        with stylable_container(
-            key="average_tickets_metric",
-            css_styles=metric_card_style  # Menggunakan style yang sama
-        ):
-            st.metric(
-                label="Average Time to Solved", 
-                value=formatted_avg_duration, 
-                help='Average time for ticket to solved or closed'
-            )
+    # Display metrics
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric(label="Total Tickets", value=total_tickets)
+    m2.metric(label="Open Tickets", value=total_open_tickets)
+    m3.metric(label="Solved Tickets", value=total_solved_tickets)
+    m4.metric(label="Invalid Tickets", value=total_invalid_ticket)
+    m5.metric(label="Avg. Resolution Time", value=formatted_avg_duration)

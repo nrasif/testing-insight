@@ -1,162 +1,173 @@
+# components/filters.py
+import streamlit as st
 import pandas as pd
-import re
-import streamlit as st # Diperlukan untuk reset_jira_filters karena berinteraksi dengan st.session_state
+from datetime import date
 
+# --- Adjust Python Path to import from root ---
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-def apply_filters(df_original: pd.DataFrame, 
-                  ticket_id_search: str, 
-                  status_filter: list, 
-                  feature_filter: list, 
-                  platform_filter: list, 
-                  date_filter: tuple, 
-                  labels_filter: list, 
-                  stage_filter: list, 
-                  solved_filter: str, 
-                  title_filter: str,
-                  pills_selection: str | None = None) -> pd.DataFrame: # <<< PARAMETER BARU DITAMBAHKAN
+# A dictionary to define all filter keys and their default values.
+# This makes initialization and resetting much cleaner.
+FILTER_DEFAULTS = {
+    "search_filter": "",
+    "title_filter": "",
+    "status_filter": [],
+    "feature_filter": [],
+    "platform_filter": [],
+    "labels_filter": [],
+    "stage_filter": [],
+    "solved_filter": None,
+    "pills_selection": None,
+    "date_filter": (date.today(), date.today()) # Placeholder default
+}
+
+def initialize_filter_session_state(df: pd.DataFrame, force_reset=False):
     """
-    Menerapkan berbagai filter ke DataFrame JIRA.
-
-    Args:
-        df_original (pd.DataFrame): DataFrame JIRA asli.
-        ticket_id_search (str): ID tiket yang dipisahkan koma untuk pencarian.
-        status_filter (list): Daftar status yang dipilih.
-        feature_filter (list): Daftar fitur yang dipilih.
-        platform_filter (list): Daftar platform yang dipilih.
-        date_filter (tuple): Tuple (tanggal_mulai, tanggal_akhir) untuk kolom 'Created'.
-        labels_filter (list): Daftar label yang dipilih.
-        stage_filter (list): Daftar tahap (stage) yang dipilih.
-        solved_filter (str): 'Solved', 'Not Yet', atau None.
-        title_filter (str): Kata kunci yang dipisahkan koma untuk pencarian di 'Title'.
-        pills_selection (str | None): Opsi yang dipilih dari st.pills. Defaultnya None.
-        
-    Returns:
-        pd.DataFrame: DataFrame yang sudah difilter.
+    Initializes or resets all filter-related session states from a single source of truth.
+    - df: The original DataFrame, used to set the date range.
+    - force_reset: If True, it will overwrite existing values with defaults.
     """
-    df_filtered = df_original.copy()
+    # Initialize date filter separately as it depends on the data
+    if 'date_filter' not in st.session_state or force_reset:
+        if 'Created' in df.columns and pd.api.types.is_datetime64_any_dtype(df['Created']) and not df['Created'].dropna().empty:
+            valid_dates = df['Created'].dropna()
+            st.session_state.date_filter = (valid_dates.min().date(), valid_dates.max().date())
+        else:
+            # Provide a sensible default if no data is available
+            st.session_state.date_filter = (date.today(), date.today())
 
-    # <<< BLOK FILTER PILLS DIMULAI >>>
-    # Filter berdasarkan pilihan dari st.pills
-    if pills_selection:
-        if pills_selection == 'PTR 1.1.0':
-            df_filtered = df_filtered[df_filtered['Title'].str.contains('PTR 1.1.0', na=False)]
-        
-        elif pills_selection == "SITBAU 1.1.0 GS 9.10.1":
-            df_filtered = df_filtered[
-                (df_filtered['Title'].str.contains('GS 9.10.1', na=False)) & 
-                (df_filtered['Stage'] == 'Regression')
-            ]
+    # Initialize all other filters from the defaults dictionary
+    for key, default_value in FILTER_DEFAULTS.items():
+        if key == 'date_filter': continue # Skip date_filter as it's handled above
+        if key not in st.session_state or force_reset:
+            st.session_state[key] = default_value
 
-        elif pills_selection == "PTR 1.1.0 GS 9.10.1":
-            df_filtered = df_filtered[
-                (df_filtered['Title'].str.contains('GS 9.10.1', na=False)) & 
-                (df_filtered['Stage'] == 'PTR')
-            ]
+    # Reset pagination for the ticket list when filters are reset
+    if force_reset:
+        if 'current_page' in st.session_state:
+            st.session_state.current_page = 1
+        if 'pagination_key_counter' in st.session_state:
+            st.session_state.pagination_key_counter += 1
+
+
+def render_filters(df: pd.DataFrame):
+    """Renders all filter widgets in the Streamlit expander."""
+    initialize_filter_session_state(df) # Ensure state exists before rendering
+
+    # --- Row 1 ---
+    search_col, _, filter_col2, filter_col3, filter_col4, filter_col5 = st.columns([1.5, 0.05, 1, 1.3, 1, 1])
+
+    with search_col:
+        st.text_input("Ticket ID Search", placeholder="e.g. 1061, 998", key="search_filter", label_visibility="collapsed")
+
+    with filter_col2:
+        status_opts = sorted(df['Status'].astype(str).unique()) if 'Status' in df.columns else []
+        st.multiselect("Status", options=status_opts, placeholder="Select Status", key='status_filter', label_visibility="collapsed")
+
+    with filter_col3:
+        feature_opts = sorted(df['Feature'].astype(str).unique()) if 'Feature' in df.columns else []
+        st.multiselect("Feature", options=feature_opts, placeholder="Select Feature", key='feature_filter', label_visibility="collapsed")
+
+    with filter_col4:
+        platform_opts = sorted(df['Platform'].astype(str).unique()) if 'Platform' in df.columns else []
+        st.multiselect("Platform", options=platform_opts, placeholder="Select Platform", key='platform_filter', label_visibility="collapsed")
+
+    with filter_col5:
+        # --- PERBAIKAN ---
+        # Logika di sini diubah agar widget date_input selalu ditampilkan,
+        # selama data tanggal yang valid ada di DataFrame.
+        if 'Created' in df.columns and pd.api.types.is_datetime64_any_dtype(df['Created']) and not df['Created'].dropna().empty:
+            min_date_bound = df['Created'].min().date()
+            max_date_bound = df['Created'].max().date()
             
-        elif pills_selection == "SITBAU Always On 1.1.0":
-            df_filtered = df_filtered[
-                (df_filtered['Title'].str.contains('Always On', na=False)) & 
-                (df_filtered['Stage'] == 'Regression')
-            ]
+            st.date_input(
+                "Date Range",
+                min_value=min_date_bound,
+                max_value=max_date_bound,
+                format="DD/MM/YYYY",
+                key='date_filter', # Kunci ini akan membaca dan menulis ke session_state
+                label_visibility="collapsed"
+            )
+        else:
+            st.info("Date filter not available.")
 
-        elif pills_selection == "PTR Always On 1.1.0":
-            df_filtered = df_filtered[
-                (df_filtered['Title'].str.contains('Always On', na=False)) & 
-                (df_filtered['Stage'] == 'PTR')
-            ]
-        
-        elif pills_selection == "Release 1.1.1 SITBAU":
-            df_filtered = df_filtered[
-                (df_filtered['Title'].str.contains('Release 1.1.1', na=False)) & 
-                (df_filtered['Stage'] == 'Regression')
-            ]
 
-    # Filter berdasarkan Ticket ID Search
-    if ticket_id_search and 'Tickets' in df_filtered.columns:
-        search_terms = [term.strip() for term in ticket_id_search.split(',') if term.strip()]
+    # --- Row 2 ---
+    label_col, stage_col, solved_col, title_col, reset_col = st.columns([0.8, 0.76, 1, 2.33, 1])
+
+    with label_col:
+        if "Labels" in df.columns and not df['Labels'].dropna().empty:
+            labels = sorted(df['Labels'].dropna().str.split(',').explode().str.strip().unique())
+            st.multiselect("Labels", options=[l for l in labels if l], placeholder="Select Labels", key='labels_filter', label_visibility="collapsed")
+
+    with stage_col:
+        stage_opts = sorted(df['Stage'].astype(str).unique()) if 'Stage' in df.columns else []
+        st.multiselect("Stage", options=stage_opts, placeholder="Select Stage", key='stage_filter', label_visibility="collapsed")
+
+    with solved_col:
+        st.selectbox("Is it solved?", options=['Solved', 'Not Yet'], index=None, placeholder="Is it solved?", key='solved_filter', label_visibility="collapsed")
+
+    with title_col:
+        st.text_input("Title Search", placeholder='Keywords in Title', key='title_filter', label_visibility="collapsed")
+
+    with reset_col:
+        st.button(":material/refresh: Reset Filters", on_click=initialize_filter_session_state, args=(df, True), use_container_width=True, type="secondary")
+
+
+def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Applies all active filters from session_state to the DataFrame.
+    This function now reads directly from st.session_state.
+    """
+    if df.empty:
+        return df
+
+    df_filtered = df.copy()
+
+    # Text-based searches
+    if st.session_state.get('search_filter'):
+        search_terms = [term.strip() for term in st.session_state.search_filter.split(',') if term.strip()]
         if search_terms:
-            regex_pattern = '|'.join(map(re.escape, search_terms))
-            df_filtered = df_filtered[df_filtered['Tickets'].astype(str).str.contains(regex_pattern, case=False, na=False)]
+            df_filtered = df_filtered[df_filtered['Tickets'].astype(str).str.contains('|'.join(search_terms), case=False, na=False)]
 
-    # Filter berdasarkan Status
-    if status_filter and 'Status' in df_filtered.columns:
-        df_filtered = df_filtered[df_filtered['Status'].isin(status_filter)]
-
-    # Filter berdasarkan Feature
-    if feature_filter and 'Feature' in df_filtered.columns:
-        df_filtered = df_filtered[df_filtered['Feature'].isin(feature_filter)]
-
-    # Filter berdasarkan Platform
-    if platform_filter and 'Platform' in df_filtered.columns:
-        platform_conditions = pd.Series([False] * len(df_filtered), index=df_filtered.index)
-        for p_select in platform_filter:
-            platform_conditions = platform_conditions | df_filtered['Platform'].astype(str).str.contains(p_select, case=False, na=False)
-        df_filtered = df_filtered[platform_conditions]
-
-    # Filter berdasarkan Date Range 'Created'
-    if date_filter and len(date_filter) == 2 and 'Created' in df_filtered.columns:
-        start_date, end_date = pd.to_datetime(date_filter[0]), pd.to_datetime(date_filter[1])
-        if not pd.api.types.is_datetime64_any_dtype(df_filtered['Created']):
-            df_filtered['Created'] = pd.to_datetime(df_filtered['Created'], errors='coerce')
-        df_filtered = df_filtered[
-            (df_filtered['Created'].dt.normalize() >= start_date.normalize()) &
-            (df_filtered['Created'].dt.normalize() <= end_date.normalize())
-        ]
-        
-    # Filter berdasarkan Labels
-    if labels_filter and 'Labels' in df_filtered.columns:
-        if not pd.api.types.is_string_dtype(df_filtered['Labels']):
-            df_filtered['Labels'] = df_filtered['Labels'].astype(str)
-        regex_pattern = '|'.join(map(re.escape, labels_filter))
-        df_filtered = df_filtered[df_filtered['Labels'].str.contains(regex_pattern, na=False)]
-        
-    # Filter berdasarkan Stage
-    if stage_filter and 'Stage' in df_filtered.columns:
-        df_filtered = df_filtered[df_filtered['Stage'].isin(stage_filter)]
-        
-    # Filter berdasarkan Solved/Not Yet
-    if solved_filter == 'Solved':
-        df_filtered = df_filtered[df_filtered['Resolved_Time'].notna()]
-    elif solved_filter == 'Not Yet':
-        if 'Status' in df_filtered.columns:
-            df_filtered = df_filtered[~df_filtered['Status'].isin(['RESOLVE', 'Invalid'])]
-
-    # Filter berdasarkan Title Search
-    if title_filter and 'Title' in df_filtered.columns:
-        title_terms = [term.strip() for term in title_filter.split(',') if term.strip()]
+    if st.session_state.get('title_filter'):
+        title_terms = [term.strip() for term in st.session_state.title_filter.split(',') if term.strip()]
         if title_terms:
-            regex_pattern = '|'.join(map(re.escape, title_terms))
-            df_filtered = df_filtered[df_filtered['Title'].astype(str).str.contains(regex_pattern, case=False, na=False)]
-            
-    return df_filtered
+            df_filtered = df_filtered[df_filtered['Title'].astype(str).str.contains('|'.join(title_terms), case=False, na=False)]
 
-def reset_jira_filters(df_data: pd.DataFrame):
-    """
-    Mereset semua filter Streamlit session state yang berhubungan dengan JIRA ke nilai defaultnya.
-    
-    Args:
-        df_data (pd.DataFrame): DataFrame JIRA asli untuk menentukan tanggal min/max.
-    """
-    # <<< BARIS BARU DITAMBAHKAN >>>
-    st.session_state.pills_selection = None # Reset filter pills, sesuaikan key jika berbeda
-    
-    st.session_state.status_filter = []
-    st.session_state.feature_filter = []
-    st.session_state.platform_filter = []
-    st.session_state.search_filter = ""
-    st.session_state.labels_filter = []
-    st.session_state.stage_filter = []
-    st.session_state.solved_filter = None
-    st.session_state.title_filter = ""
-    
-    if 'Created' in df_data.columns and not df_data['Created'].dropna().empty:
-        min_date = df_data['Created'].dropna().min().date()
-        max_date = df_data['Created'].dropna().max().date()
-        st.session_state.date_filter = (min_date, max_date)
-    else:
-        st.session_state.date_filter = (None, None)
-    
-    st.session_state.current_page_col1 = 1
-    st.session_state.selected_ticket_id = None
-    st.session_state.selected_ticket_details = None
+    # Multi-select filters
+    for key in ["status_filter", "feature_filter", "platform_filter", "stage_filter"]:
+        # Derives the column name (e.g., 'status_filter' -> 'Status')
+        column_name = key.replace('_filter', '').capitalize()
+        if st.session_state.get(key):
+            df_filtered = df_filtered[df_filtered[column_name].isin(st.session_state[key])]
 
+    # Special handler for Labels (AND logic)
+    if st.session_state.get('labels_filter'):
+        for label in st.session_state.labels_filter:
+            df_filtered = df_filtered[df_filtered['Labels'].astype(str).str.contains(label, case=False, na=False)]
+
+    # --- Date Range Filter Logic ---
+    date_filter_value = st.session_state.get('date_filter')
+    if date_filter_value:
+        start_date, end_date = None, None
+        # Handle both single date and range selection
+        if isinstance(date_filter_value, tuple) and len(date_filter_value) == 1:
+            start_date = date_filter_value[0]
+            end_date = start_date  # Treat single date as a one-day range
+        elif isinstance(date_filter_value, tuple) and len(date_filter_value) == 2:
+            start_date, end_date = date_filter_value
+
+        # Apply the filter if the dates are valid
+        if start_date and end_date and pd.api.types.is_datetime64_any_dtype(df_filtered['Created']):
+             df_filtered = df_filtered[df_filtered['Created'].dt.date.between(start_date, end_date)]
+
+    # Single-select filters
+    if st.session_state.get('solved_filter'):
+        is_solved = st.session_state.solved_filter == 'Solved'
+        if 'Resolved_Time' in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered['Resolved_Time'].notna() if is_solved else df_filtered['Resolved_Time'].isna()]
+
+    return df_filtered.reset_index(drop=True)
